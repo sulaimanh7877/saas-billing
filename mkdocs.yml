@@ -1,0 +1,134 @@
+site_name: Billing & Channel Engine
+site_description: Self-hostable billing, subscriptions, entitlements, audit, analytics, and channel/partner sales for any SaaS.
+site_url: https://sulaimanh7877.github.io/saas-billing/
+repo_url: https://github.com/sulaimanh7877/saas-billing
+repo_name: sulaimanh7877/saas-billing
+edit_uri: edit/main/docs/
+copyright: MIT licensed — Copyright &copy; 2026 SULAIMAN H
+
+not_in_nav: |
+  /adr/**
+  /assets/skill/**
+
+theme:
+  name: material
+  language: en
+  logo: assets/brand.svg
+  favicon: assets/brand.svg
+  features:
+    - navigation.instant
+    - navigation.instant.progress
+    - navigation.tracking
+    - navigation.tabs
+    - navigation.sections
+    - navigation.indexes
+    - navigation.top
+    - navigation.footer
+    - toc.follow
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.code.annotate
+    - content.tabs.link
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+extra_css:
+  - assets/stylesheets/extra.css
+
+extra_javascript:
+  - assets/javascripts/copy-skill.js
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/sulaimanh7877/saas-billing
+    - icon: fontawesome/brands/python
+      link: https://pypi.org/project/billing-engine/
+    - icon: fontawesome/brands/npm
+      link: https://www.npmjs.com/package/billing-engine-skill
+  analytics:
+    feedback:
+      title: Was this page helpful?
+      ratings:
+        - icon: material/thumb-up-outline
+          title: This page was helpful
+          data: 1
+          note: Thanks for the feedback!
+        - icon: material/thumb-down-outline
+          title: This page could be improved
+          data: 0
+          note: Sorry to hear that. Please open an issue.
+
+plugins:
+  - search
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - footnotes
+  - toc:
+      permalink: true
+      title: On this page
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets:
+      base_path:
+        - .
+      check_paths: true
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.magiclink
+
+nav:
+  - Home: index.md
+  - Getting started:
+      - Installation: getting-started/installation.md
+      - Quick start: getting-started/quickstart.md
+      - Tutorial: getting-started/tutorial.md
+  - Guides:
+      - Core concepts: guides/concepts.md
+      - Catalog & plans: guides/catalog.md
+      - Subscriptions: guides/subscriptions.md
+      - Entitlements: guides/entitlements.md
+      - Invoices & credits: guides/billing.md
+      - Partners & channel: guides/partners.md
+      - Reporting: guides/reporting.md
+      - Audit & events: guides/audit-events.md
+      - Use with a coding agent: guides/agent-skill.md
+  - Deployment:
+      - Embedded library: deployment/embedded.md
+      - Standalone & REST: deployment/rest.md
+      - Command line: deployment/cli.md
+      - Docker: deployment/docker.md
+  - Reference:
+      - Configuration: reference/configuration.md
+      - REST endpoints: reference/rest-api.md
+      - Data model: reference/data-model.md
+      - Errors: reference/errors.md
+  - Architecture:
+      - Design: architecture/design.md
+      - Prefix strategy: architecture/prefix-strategy.md
+  - FAQ: faq.md
