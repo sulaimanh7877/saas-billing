@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import datetime
 from typing import Any
 
@@ -75,7 +76,7 @@ class PartnerService(Service):
         partner = self.get(partner_id)
         if status not in {"active", "inactive"}:
             raise ValidationError(f"invalid partner status {status!r}")
-        before = partner
+        before = replace(partner)
         partner.status = status
         self.uow.partners.update_partner(partner)
         self.uow.flush()
@@ -105,6 +106,13 @@ class PartnerService(Service):
         self.uow.flush()
         self.audit.record("commission_rule.create", "commission_rule", rule.id, actor, after=rule)
         return rule
+
+    def get_commission_rule(self, rule_id: str) -> CommissionRule:
+        return require(self.uow.partners.get_commission_rule(rule_id), "commission_rule", rule_id)
+
+    def list_commission_rules(self) -> list[CommissionRule]:
+        """List every commission rule (rules are deployment-global in v0.2)."""
+        return self.uow.partners.list_commission_rules()
 
     def create_agreement(
         self,

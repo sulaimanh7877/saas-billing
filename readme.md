@@ -69,7 +69,8 @@ billing = BillingEngine(
         dsn="postgresql://user:pass@localhost/mysaas",
         table_prefix="acme_",  # required, no default
         default_currency="USD",
-        grace_period_days=3,
+        trial_days=14,  # default trial when a plan version sets none
+        grace_period_days=3,  # access window after a period ends
     )
 )
 ```
@@ -95,6 +96,9 @@ and outbox rows atomically with the change.
 export BILLING_DSN="postgresql://user:pass@localhost/mysaas"
 export BILLING_TABLE_PREFIX="acme_"
 export BILLING_API_KEY="a-long-random-secret"
+export BILLING_DEFAULT_CURRENCY="USD"     # optional
+export BILLING_TRIAL_DAYS="14"            # optional
+export BILLING_GRACE_PERIOD_DAYS="3"      # optional
 uvicorn billing_engine.server:create_server --factory --port 8000
 ```
 

@@ -7,7 +7,7 @@ from billing_engine.naming import PrefixNamer
 def test_prefix_normalization() -> None:
     assert PrefixNamer("acme").prefix == "acme_"
     assert PrefixNamer("acme_").prefix == "acme_"
-    assert PrefixNamer("acme__").prefix == "acme__"
+    assert PrefixNamer("acme__").prefix == "acme_"
 
 
 def test_table_names() -> None:

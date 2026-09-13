@@ -7,7 +7,12 @@ from datetime import datetime
 from billing_engine.domain.commission import compute_commission
 from billing_engine.domain.entities import License, LicenseAllocation, Price
 from billing_engine.domain.enums import AccountType, AllocationStatus, MoneyModel
-from billing_engine.domain.errors import AllocationExhaustedError, ConflictError, ValidationError
+from billing_engine.domain.errors import (
+    AllocationExhaustedError,
+    ConflictError,
+    NotFoundError,
+    ValidationError,
+)
 from billing_engine.domain.repositories import Repositories
 from billing_engine.domain.value_objects import new_ulid, utcnow
 from billing_engine.services.base import Service, require
@@ -25,21 +30,37 @@ class LicenseService(Service):
         *,
         default_currency: str = "USD",
         grace_period_days: int = 0,
+        trial_days: int = 0,
     ) -> None:
         super().__init__(
-            uow, default_currency=default_currency, grace_period_days=grace_period_days
+            uow,
+            default_currency=default_currency,
+            grace_period_days=grace_period_days,
+            trial_days=trial_days,
         )
         self.partners = PartnerService(
-            uow, default_currency=default_currency, grace_period_days=grace_period_days
+            uow,
+            default_currency=default_currency,
+            grace_period_days=grace_period_days,
+            trial_days=trial_days,
         )
         self.accounts = PartnerAccountService(
-            uow, default_currency=default_currency, grace_period_days=grace_period_days
+            uow,
+            default_currency=default_currency,
+            grace_period_days=grace_period_days,
+            trial_days=trial_days,
         )
         self.customers = CustomerService(
-            uow, default_currency=default_currency, grace_period_days=grace_period_days
+            uow,
+            default_currency=default_currency,
+            grace_period_days=grace_period_days,
+            trial_days=trial_days,
         )
         self.subscriptions = SubscriptionService(
-            uow, default_currency=default_currency, grace_period_days=grace_period_days
+            uow,
+            default_currency=default_currency,
+            grace_period_days=grace_period_days,
+            trial_days=trial_days,
         )
 
     def available(self, allocation: LicenseAllocation) -> int:
@@ -127,7 +148,9 @@ class LicenseService(Service):
         actor: Actor | None = None,
     ) -> License:
         """Issue a license to an end customer, starting their subscription."""
-        allocation = self.get_allocation(allocation_id)
+        allocation = self.uow.licenses.get_allocation_for_update(allocation_id)
+        if allocation is None:
+            raise NotFoundError(f"license_allocation {allocation_id!r} was not found")
         if allocation.status != AllocationStatus.ACTIVE.value:
             raise ConflictError("license allocation is not active")
         if self.available(allocation) <= 0:
@@ -252,10 +275,11 @@ class LicenseService(Service):
         prices = self.uow.catalog.list_prices(plan_version_id)
         if not prices:
             raise ValidationError("plan version has no price to charge")
+        wanted = currency.upper()
         for price in prices:
-            if price.currency == currency:
+            if price.currency == wanted:
                 return price
-        return prices[0]
+        raise NotFoundError(f"no {wanted} price for plan version {plan_version_id!r}")
 
     def get(self, license_id: str) -> License:
         return require(self.uow.licenses.get_license(license_id), "license", license_id)

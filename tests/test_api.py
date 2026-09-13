@@ -129,3 +129,59 @@ def test_partner_flow(tmp_path) -> None:
     )
     channel = client.get("/reports/channel", headers=HEADERS).json()
     assert channel and channel[0]["partner_id"] == partner["id"]
+
+
+def test_commission_rules_are_global(tmp_path) -> None:
+    client = make_client(tmp_path)
+    created = client.post(
+        "/commission-rules", json={"basis": "flat", "rate_bps": 1000}, headers=HEADERS
+    )
+    assert created.status_code == 200
+    listed = client.get("/commission-rules", headers=HEADERS).json()
+    assert [rule["id"] for rule in listed] == [created.json()["id"]]
+    # the misleading partner-scoped route is gone
+    response = client.post(
+        "/partners/some-id/commission-rules", json={"basis": "flat"}, headers=HEADERS
+    )
+    assert response.status_code in (404, 405)
+
+
+def test_invalid_collection_method_maps_to_400(tmp_path) -> None:
+    client = make_client(tmp_path)
+    customer = client.post("/customers", json={"external_id": "cm"}, headers=HEADERS).json()
+    plan = client.post("/plans", json={"key": "cm-plan"}, headers=HEADERS).json()
+    version = client.post(
+        f"/plans/{plan['id']}/versions",
+        json={"prices": [{"amount_minor": 100, "currency": "USD", "interval": "month"}]},
+        headers=HEADERS,
+    ).json()
+    response = client.post(
+        "/subscriptions",
+        json={
+            "customer_id": customer["id"],
+            "plan_version_id": version["id"],
+            "collection_method": "bogus",
+        },
+        headers=HEADERS,
+    )
+    assert response.status_code == 400
+
+
+def test_unpublished_plan_version_maps_to_409(tmp_path) -> None:
+    client = make_client(tmp_path)
+    customer = client.post("/customers", json={"external_id": "up"}, headers=HEADERS).json()
+    plan = client.post("/plans", json={"key": "up-plan"}, headers=HEADERS).json()
+    version = client.post(
+        f"/plans/{plan['id']}/versions",
+        json={
+            "prices": [{"amount_minor": 100, "currency": "USD", "interval": "month"}],
+            "is_published": False,
+        },
+        headers=HEADERS,
+    ).json()
+    response = client.post(
+        "/subscriptions",
+        json={"customer_id": customer["id"], "plan_version_id": version["id"]},
+        headers=HEADERS,
+    )
+    assert response.status_code == 409

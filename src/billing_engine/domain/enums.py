@@ -31,14 +31,25 @@ class SubscriptionStatus(StrEnum):
     EXPIRED = "expired"
 
 
+class CollectionMethod(StrEnum):
+    """How a subscription is expected to be paid."""
+
+    MANUAL = "manual"
+    AUTOMATIC = "automatic"
+
+
 class AdjustmentType(StrEnum):
-    """Kinds of manual subscription adjustments."""
+    """Kinds of subscription adjustments."""
 
     EXTEND = "extend"
     SHORTEN = "shorten"
     TRIAL_EXTEND = "trial_extend"
     PAUSE = "pause"
     RESUME = "resume"
+    CANCEL = "cancel"
+    RENEW = "renew"
+    REACTIVATE = "reactivate"
+    EXPIRE = "expire"
     SET_PERIOD_END = "set_period_end"
     PLAN_CHANGE = "plan_change"
 

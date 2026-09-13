@@ -5,7 +5,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 
-from billing_engine.domain.entities import EntitlementOverride, Feature, Subscription
+from billing_engine.domain.entities import (
+    EntitlementOverride,
+    Feature,
+    PlanEntitlement,
+    Subscription,
+)
 from billing_engine.domain.enums import OverrideScope, SubscriptionStatus
 from billing_engine.domain.errors import NotFoundError, ValidationError
 from billing_engine.domain.lifecycle import grants_access
@@ -45,10 +50,12 @@ class EntitlementService(Service):
             return None
         return override
 
-    def _find_plan_entitlement(self, subscription: Subscription, feature_id: str) -> int | None:
+    def _find_plan_entitlement(
+        self, subscription: Subscription, feature_id: str
+    ) -> PlanEntitlement | None:
         entitlements = self.uow.catalog.list_plan_entitlements(subscription.plan_version_id)
         matches = [item for item in entitlements if item.feature_id == feature_id]
-        return matches[0].value if matches else None
+        return matches[0] if matches else None
 
     def resolve(self, customer_id: str, feature_key: str) -> ResolvedEntitlement:
         """Resolve the effective entitlement using the fallback chain."""
@@ -77,12 +84,12 @@ class EntitlementService(Service):
             )
 
         if subscription is not None:
-            plan_value = self._find_plan_entitlement(subscription, feature.id)
-            if plan_value is not None:
+            plan_entitlement = self._find_plan_entitlement(subscription, feature.id)
+            if plan_entitlement is not None:
                 return ResolvedEntitlement(
                     feature_key=feature_key,
-                    value=plan_value,
-                    limit_value=plan_value,
+                    value=plan_entitlement.value,
+                    limit_value=plan_entitlement.limit_value,
                     value_type=feature.value_type,
                     source="plan",
                     subscription_id=subscription.id,
@@ -208,6 +215,9 @@ class EntitlementService(Service):
         """Delete an entitlement override by id."""
         if not override_id:
             raise ValidationError("override_id is required")
+        override = require(self.uow.entitlements.get_override(override_id), "override", override_id)
         self.uow.entitlements.delete_override(override_id)
         self.uow.flush()
-        self.audit.record("entitlement.override.remove", "override", override_id, actor)
+        self.audit.record(
+            "entitlement.override.remove", "override", override_id, actor, before=override
+        )

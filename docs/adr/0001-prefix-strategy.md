@@ -54,8 +54,10 @@ appears exactly once.
 - Multiple logical deployments can share one database with distinct prefixes.
 - Constraint and index names remain deterministic and collision-free.
 - One prefix per process in v0.1: constructing two engines with different
-  prefixes in a single process is not supported. This is acceptable for the
-  embedded and standalone deployment models, where a process serves one
+  prefixes in a single process is not supported. `BillingEngine` tracks the
+  process prefix and raises `ConfigurationError` on a second, different prefix
+  instead of silently renaming the first engine's tables. This is acceptable for
+  the embedded and standalone deployment models, where a process serves one
   deployment.
 - Migrations must interpolate the prefix everywhere; hard-coded table names are
   forbidden.

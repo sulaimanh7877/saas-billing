@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 
 from billing_engine.domain.entities import (
     Price,
@@ -12,11 +12,12 @@ from billing_engine.domain.entities import (
 from billing_engine.domain.enums import (
     AdjustmentType,
     BillingInterval,
+    CollectionMethod,
     SubscriptionStatus,
 )
 from billing_engine.domain.errors import ConflictError, NotFoundError, ValidationError
 from billing_engine.domain.lifecycle import ensure_transition
-from billing_engine.domain.value_objects import add_months, new_ulid, period_end, utcnow
+from billing_engine.domain.value_objects import add_months, as_utc, new_ulid, period_end, utcnow
 from billing_engine.services.base import Service, require
 from billing_engine.services.context import Actor
 
@@ -26,11 +27,7 @@ _RENEWABLE = {
     SubscriptionStatus.PAST_DUE.value,
 }
 
-
-def _as_utc(value: datetime) -> datetime:
-    if value.tzinfo is None:
-        return value.replace(tzinfo=UTC)
-    return value.astimezone(UTC)
+_VALID_COLLECTION_METHODS = {member.value for member in CollectionMethod}
 
 
 class SubscriptionService(Service):
@@ -78,13 +75,22 @@ class SubscriptionService(Service):
         )
         if quantity < 1:
             raise ValidationError("quantity must be at least 1")
-        effective_trial = version.trial_days if trial_days is None else trial_days
+        if collection_method not in _VALID_COLLECTION_METHODS:
+            raise ValidationError(f"invalid collection_method {collection_method!r}")
+        if not version.is_published:
+            raise ConflictError(f"plan_version {version.id!r} is not published")
+        if trial_days is not None:
+            effective_trial = trial_days
+        elif version.trial_days:
+            effective_trial = version.trial_days
+        else:
+            effective_trial = self.trial_days
         if effective_trial < 0:
             raise ValidationError("trial_days must be non-negative")
 
         price = self._find_price(version.id, price_id, currency)
         interval = BillingInterval(price.interval)
-        start = _as_utc(start_at) if start_at is not None else utcnow()
+        start = as_utc(start_at) if start_at is not None else utcnow()
 
         subscription = Subscription(
             id=new_ulid(),
@@ -167,9 +173,9 @@ class SubscriptionService(Service):
     ) -> Subscription:
         """Move the current period end forward by days, months, or a date."""
         subscription = self.get(subscription_id)
-        base = _as_utc(subscription.current_period_end or utcnow())
+        base = as_utc(subscription.current_period_end or utcnow())
         if until is not None:
-            new_end = _as_utc(until)
+            new_end = as_utc(until)
         elif months is not None:
             new_end = add_months(base, months)
         elif days is not None:
@@ -207,11 +213,11 @@ class SubscriptionService(Service):
         subscription = self.get(subscription_id)
         if days < 1:
             raise ValidationError("days must be at least 1")
-        base = _as_utc(subscription.trial_end or subscription.current_period_end or utcnow())
+        base = as_utc(subscription.trial_end or subscription.current_period_end or utcnow())
         new_end = base + timedelta(days=days)
         subscription.trial_end = new_end
         subscription.current_period_end = max(
-            _as_utc(subscription.current_period_end or new_end), new_end
+            as_utc(subscription.current_period_end or new_end), new_end
         )
         self._apply(
             subscription,
@@ -238,7 +244,7 @@ class SubscriptionService(Service):
         subscription = self.get(subscription_id)
         ensure_transition(SubscriptionStatus(subscription.status), SubscriptionStatus.PAUSED)
         subscription.status = SubscriptionStatus.PAUSED.value
-        subscription.paused_until = _as_utc(until) if until is not None else None
+        subscription.paused_until = as_utc(until) if until is not None else None
         self._apply(
             subscription,
             AdjustmentType.PAUSE.value,
@@ -282,7 +288,7 @@ class SubscriptionService(Service):
         """Cancel immediately or at the end of the current period."""
         subscription = self.get(subscription_id)
         if at_period_end:
-            subscription.cancel_at = _as_utc(subscription.current_period_end or utcnow())
+            subscription.cancel_at = as_utc(subscription.current_period_end or utcnow())
         else:
             ensure_transition(SubscriptionStatus(subscription.status), SubscriptionStatus.CANCELED)
             subscription.status = SubscriptionStatus.CANCELED.value
@@ -290,7 +296,7 @@ class SubscriptionService(Service):
             subscription.cancel_at = None
         self._apply(
             subscription,
-            AdjustmentType.SET_PERIOD_END.value,
+            AdjustmentType.CANCEL.value,
             actor=actor,
             reason=reason,
             action="subscription.cancel",
@@ -315,14 +321,14 @@ class SubscriptionService(Service):
         subscription.paused_until = None
         if (
             subscription.current_period_end is None
-            or _as_utc(subscription.current_period_end) <= now
+            or as_utc(subscription.current_period_end) <= now
         ):
             price = self._find_price(subscription.plan_version_id, subscription.price_id, None)
             subscription.current_period_start = now
             subscription.current_period_end = period_end(now, BillingInterval(price.interval))
         self._apply(
             subscription,
-            AdjustmentType.RESUME.value,
+            AdjustmentType.REACTIVATE.value,
             actor=actor,
             reason=reason,
             action="subscription.reactivate",
@@ -360,42 +366,103 @@ class SubscriptionService(Service):
         )
         return subscription
 
+    def _interval(self, subscription: Subscription) -> BillingInterval:
+        price = self._find_price(subscription.plan_version_id, subscription.price_id, None)
+        return BillingInterval(price.interval)
+
     def renew(
         self,
         subscription_id: str,
         *,
+        now: datetime | None = None,
         actor: Actor | None = None,
     ) -> Subscription:
         """Advance a due subscription into its next billing period."""
         subscription = self.get(subscription_id)
         if subscription.status not in _RENEWABLE:
             raise ConflictError(f"cannot renew subscription in status {subscription.status!r}")
-        price = self._find_price(subscription.plan_version_id, subscription.price_id, None)
-        start = _as_utc(subscription.current_period_end or utcnow())
+        moment = as_utc(now) if now is not None else utcnow()
+        interval = self._interval(subscription)
+        if interval is BillingInterval.ONE_TIME:
+            raise ConflictError("a one-time subscription has no next period to renew")
+        trial_end = as_utc(subscription.trial_end) if subscription.trial_end is not None else None
+        if subscription.status == SubscriptionStatus.TRIALING.value:
+            if trial_end is not None and trial_end > moment:
+                return subscription
+            start = trial_end or as_utc(subscription.current_period_end or moment)
+        else:
+            start = as_utc(subscription.current_period_end or moment)
         subscription.current_period_start = start
-        subscription.current_period_end = period_end(start, BillingInterval(price.interval))
+        subscription.current_period_end = period_end(start, interval)
         subscription.status = SubscriptionStatus.ACTIVE.value
+        subscription.grace_until = None
         self._apply(
             subscription,
-            AdjustmentType.SET_PERIOD_END.value,
+            AdjustmentType.RENEW.value,
             actor=actor,
             reason="renewal",
+            previous_period_end=start,
+            new_period_end=subscription.current_period_end,
             action="subscription.renew",
             event="subscription.renewed",
         )
         return subscription
 
+    def _expire(self, subscription: Subscription, *, reason: str, actor: Actor | None) -> None:
+        """Move a subscription past its grace window into expired."""
+        previous_end = (
+            as_utc(subscription.current_period_end)
+            if subscription.current_period_end is not None
+            else None
+        )
+        subscription.status = SubscriptionStatus.EXPIRED.value
+        subscription.canceled_at = utcnow()
+        subscription.cancel_at = None
+        subscription.grace_until = None
+        self.uow.subscriptions.update(subscription)
+        self.uow.subscriptions.add_adjustment(
+            SubscriptionAdjustment(
+                id=new_ulid(),
+                subscription_id=subscription.id,
+                adjustment_type=AdjustmentType.EXPIRE.value,
+                previous_period_end=previous_end,
+                new_period_end=previous_end,
+                reason=reason,
+                actor_type=(actor.type if actor else "system"),
+                actor_id=actor.id if actor else None,
+            )
+        )
+        self.uow.flush()
+        self.audit.record("subscription.expire", "subscription", subscription.id, actor)
+        self.audit.emit("subscription.expired", {"subscription_id": subscription.id})
+
+    def _enter_grace(self, subscription: Subscription, moment: datetime) -> bool:
+        """Start the post-period grace window; return True while grace applies."""
+        if self.grace_period_days <= 0:
+            return False
+        if subscription.grace_until is not None:
+            return as_utc(subscription.grace_until) > moment
+        subscription.status = SubscriptionStatus.PAST_DUE.value
+        subscription.grace_until = moment + timedelta(days=self.grace_period_days)
+        self.uow.subscriptions.update(subscription)
+        self.uow.flush()
+        self.audit.emit("subscription.past_due", {"subscription_id": subscription.id})
+        return True
+
     def process_due(self, *, now: datetime | None = None, actor: Actor | None = None) -> list[str]:
-        """Renew every subscription whose period has ended."""
-        moment = _as_utc(now) if now is not None else utcnow()
+        """Renew or expire every subscription whose period has ended."""
+        moment = as_utc(now) if now is not None else utcnow()
         renewed: list[str] = []
         for subscription in self.uow.subscriptions.list_due(moment):
-            if subscription.cancel_at is not None and _as_utc(subscription.cancel_at) <= moment:
-                subscription.status = SubscriptionStatus.EXPIRED.value
-                self.uow.subscriptions.update(subscription)
-                self.audit.record("subscription.expire", "subscription", subscription.id, actor)
-                self.audit.emit("subscription.expired", {"subscription_id": subscription.id})
+            interval = self._interval(subscription)
+            if subscription.cancel_at is not None and as_utc(subscription.cancel_at) <= moment:
+                if not self._enter_grace(subscription, moment):
+                    self._expire(subscription, reason="canceled at period end", actor=actor)
                 continue
-            self.renew(subscription.id, actor=actor)
+            if interval is BillingInterval.ONE_TIME:
+                if not self._enter_grace(subscription, moment):
+                    self._expire(subscription, reason="one-time period ended", actor=actor)
+                continue
+            self.renew(subscription.id, now=moment, actor=actor)
             renewed.append(subscription.id)
         return renewed

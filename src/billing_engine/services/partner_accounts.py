@@ -22,7 +22,7 @@ from billing_engine.domain.enums import (
     PayoutStatus,
 )
 from billing_engine.domain.errors import ConflictError, ValidationError
-from billing_engine.domain.value_objects import new_ulid, utcnow
+from billing_engine.domain.value_objects import as_utc, new_ulid, utcnow
 from billing_engine.services.base import Service, require
 from billing_engine.services.context import Actor
 
@@ -194,7 +194,9 @@ class PartnerAccountService(Service):
         """Summarize ledger activity for a settlement period."""
         partner = require(self.uow.partners.get_partner(partner_id), "partner", partner_id)
         target_currency = (currency or partner.currency).upper()
-        if period_end < period_start:
+        start = as_utc(period_start)
+        end = as_utc(period_end)
+        if end < start:
             raise ValidationError("period_end must not precede period_start")
 
         entries = self.uow.partner_accounts.list_entries(partner.id, currency=target_currency)
@@ -204,11 +206,11 @@ class PartnerAccountService(Service):
         commission = 0
         closing = 0
         for entry in entries:
-            moment = entry.created_at or period_start
-            if moment < period_start:
+            moment = entry.created_at or start
+            if moment < start:
                 opening += entry.amount_minor
                 continue
-            if moment > period_end:
+            if moment > end:
                 continue
             if entry.entry_type == PartnerLedgerEntryType.CHARGE.value:
                 charges += entry.amount_minor
@@ -222,8 +224,8 @@ class PartnerAccountService(Service):
             id=new_ulid(),
             partner_id=partner.id,
             currency=target_currency,
-            period_start=period_start,
-            period_end=period_end,
+            period_start=start,
+            period_end=end,
             opening_balance_minor=opening,
             charges_minor=charges,
             payments_minor=payments,
@@ -264,6 +266,10 @@ class PartnerAccountService(Service):
         for entry in lines or []:
             quantity = int(entry.get("quantity", 1))
             unit = int(entry.get("unit_amount_minor", 0))
+            if quantity < 1:
+                raise ValidationError("invoice line quantity must be at least 1")
+            if unit < 0:
+                raise ValidationError("invoice line unit_amount_minor must be non-negative")
             line = PartnerInvoiceLine(
                 id=new_ulid(),
                 partner_invoice_id=invoice.id,
@@ -303,8 +309,10 @@ class PartnerAccountService(Service):
         )
         if amount_minor <= 0:
             raise ValidationError("payment amount must be positive")
-        if invoice.status == InvoiceStatus.VOID.value:
-            raise ConflictError("cannot pay a void invoice")
+        if invoice.status != InvoiceStatus.OPEN.value:
+            raise ConflictError(
+                f"cannot pay a {invoice.status!r} invoice; only open invoices are payable"
+            )
         payment = PartnerPayment(
             id=new_ulid(),
             partner_id=invoice.partner_id,
@@ -360,6 +368,8 @@ class PartnerAccountService(Service):
         total = 0
         for entry in lines or []:
             amount = int(entry.get("amount_minor", 0))
+            if amount < 0:
+                raise ValidationError("payout line amount_minor must be non-negative")
             line = PartnerPayoutLine(
                 id=new_ulid(),
                 payout_id=payout.id,

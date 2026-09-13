@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
 from billing_engine.adapters.db import models as m
@@ -76,6 +76,10 @@ class SqlCatalogRepository(_Repository):
 
     def get_plan(self, plan_id: str) -> e.Plan | None:
         model = self.session.get(m.Plan, plan_id)
+        return to_entity(model, e.Plan) if model else None
+
+    def get_plan_for_update(self, plan_id: str) -> e.Plan | None:
+        model = self.session.get(m.Plan, plan_id, with_for_update=True)
         return to_entity(model, e.Plan) if model else None
 
     def get_plan_by_key(self, key: str) -> e.Plan | None:
@@ -190,9 +194,19 @@ class SqlSubscriptionRepository(_Repository):
         models = self.session.scalars(
             select(m.Subscription)
             .where(
-                m.Subscription.current_period_end.is_not(None),
-                m.Subscription.current_period_end <= before,
                 m.Subscription.status.in_(("trialing", "active", "past_due")),
+                or_(
+                    and_(
+                        m.Subscription.status != "trialing",
+                        m.Subscription.current_period_end.is_not(None),
+                        m.Subscription.current_period_end <= before,
+                    ),
+                    and_(
+                        m.Subscription.status == "trialing",
+                        m.Subscription.trial_end.is_not(None),
+                        m.Subscription.trial_end <= before,
+                    ),
+                ),
             )
             .order_by(m.Subscription.current_period_end)
         )
@@ -217,6 +231,10 @@ class SqlEntitlementRepository(_Repository):
         model = m.EntitlementOverride()
         apply_entity(model, override)
         self.session.add(model)
+
+    def get_override(self, override_id: str) -> e.EntitlementOverride | None:
+        model = self.session.get(m.EntitlementOverride, override_id)
+        return to_entity(model, e.EntitlementOverride) if model else None
 
     def get_customer_override(
         self, customer_id: str, feature_id: str
@@ -321,13 +339,25 @@ class SqlCreditRepository(_Repository):
         )
         return [to_entity(model, e.CreditEntry) for model in models]
 
-    def balance(self, customer_id: str) -> int:
+    def balance(self, customer_id: str, currency: str) -> int:
         total = self.session.scalar(
             select(func.coalesce(func.sum(m.CreditEntry.amount_minor), 0)).where(
-                m.CreditEntry.customer_id == customer_id
+                m.CreditEntry.customer_id == customer_id,
+                m.CreditEntry.currency == currency.upper(),
             )
         )
         return int(total or 0)
+
+    def balance_for_update(self, customer_id: str, currency: str) -> int:
+        rows = self.session.scalars(
+            select(m.CreditEntry)
+            .where(
+                m.CreditEntry.customer_id == customer_id,
+                m.CreditEntry.currency == currency.upper(),
+            )
+            .with_for_update()
+        )
+        return sum(entry.amount_minor for entry in rows)
 
 
 class SqlAuditRepository(_Repository):
@@ -385,10 +415,12 @@ class SqlEventRepository(_Repository):
             model.status = "delivered"
             model.delivered_at = delivered_at
 
-    def mark_failed(self, event_id: str, error: str, retry_at: datetime) -> None:
+    def mark_failed(
+        self, event_id: str, error: str, retry_at: datetime, *, final: bool = False
+    ) -> None:
         model = self.session.get(m.Event, event_id)
         if model is not None:
-            model.status = "pending"
+            model.status = "failed" if final else "pending"
             model.attempts += 1
             model.last_error = error
             model.available_at = retry_at
@@ -430,7 +462,9 @@ class SqlPartnerRepository(_Repository):
 
     def list_agreements(self, partner_id: str) -> list[e.PartnerAgreement]:
         models = self.session.scalars(
-            select(m.PartnerAgreement).where(m.PartnerAgreement.partner_id == partner_id)
+            select(m.PartnerAgreement)
+            .where(m.PartnerAgreement.partner_id == partner_id)
+            .order_by(m.PartnerAgreement.created_at, m.PartnerAgreement.effective_from)
         )
         return [to_entity(model, e.PartnerAgreement) for model in models]
 
@@ -443,6 +477,12 @@ class SqlPartnerRepository(_Repository):
         model = self.session.get(m.CommissionRule, rule_id)
         return to_entity(model, e.CommissionRule) if model else None
 
+    def list_commission_rules(self) -> list[e.CommissionRule]:
+        models = self.session.scalars(
+            select(m.CommissionRule).order_by(m.CommissionRule.created_at)
+        )
+        return [to_entity(model, e.CommissionRule) for model in models]
+
 
 class SqlLicenseRepository(_Repository):
     def add_allocation(self, allocation: e.LicenseAllocation) -> None:
@@ -452,6 +492,10 @@ class SqlLicenseRepository(_Repository):
 
     def get_allocation(self, allocation_id: str) -> e.LicenseAllocation | None:
         model = self.session.get(m.LicenseAllocation, allocation_id)
+        return to_entity(model, e.LicenseAllocation) if model else None
+
+    def get_allocation_for_update(self, allocation_id: str) -> e.LicenseAllocation | None:
+        model = self.session.get(m.LicenseAllocation, allocation_id, with_for_update=True)
         return to_entity(model, e.LicenseAllocation) if model else None
 
     def update_allocation(self, allocation: e.LicenseAllocation) -> None:
@@ -503,7 +547,7 @@ class SqlPartnerAccountRepository(_Repository):
         model = self.session.scalar(
             select(m.PartnerAccount).where(
                 m.PartnerAccount.partner_id == partner_id,
-                m.PartnerAccount.currency == currency,
+                m.PartnerAccount.currency == currency.upper(),
                 m.PartnerAccount.account_type == account_type,
             )
         )
@@ -541,7 +585,7 @@ class SqlPartnerAccountRepository(_Repository):
             m.PartnerLedgerEntry.partner_id == partner_id
         )
         if currency is not None:
-            statement = statement.where(m.PartnerLedgerEntry.currency == currency)
+            statement = statement.where(m.PartnerLedgerEntry.currency == currency.upper())
         if since is not None:
             statement = statement.where(m.PartnerLedgerEntry.created_at >= since)
         if until is not None:

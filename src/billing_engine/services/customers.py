@@ -29,6 +29,8 @@ class CustomerService(Service):
             raise ValidationError("external_id is required")
         if self.uow.customers.get_by_external_id(cleaned) is not None:
             raise ConflictError(f"customer with external_id {cleaned!r} already exists")
+        if partner_id is not None:
+            require(self.uow.partners.get_partner(partner_id), "partner", partner_id)
 
         customer = Customer(
             id=new_ulid(),

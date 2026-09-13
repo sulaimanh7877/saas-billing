@@ -12,7 +12,8 @@ from billing_engine.domain.value_objects import new_ulid, utcnow
 from billing_engine.services.base import Service, require
 from billing_engine.services.context import Actor
 
-_EDITABLE = {InvoiceStatus.DRAFT.value, InvoiceStatus.OPEN.value}
+_EDITABLE = {InvoiceStatus.DRAFT.value}
+_PAYABLE = {InvoiceStatus.OPEN.value}
 
 
 class InvoiceService(Service):
@@ -37,6 +38,14 @@ class InvoiceService(Service):
     ) -> Invoice:
         """Create a manual invoice for a customer."""
         customer = require(self.uow.customers.get(customer_id), "customer", customer_id)
+        if subscription_id is not None:
+            subscription = require(
+                self.uow.subscriptions.get(subscription_id), "subscription", subscription_id
+            )
+            if subscription.customer_id != customer.id:
+                raise ValidationError(
+                    f"subscription {subscription_id!r} does not belong to customer {customer_id!r}"
+                )
         invoice = Invoice(
             id=new_ulid(),
             customer_id=customer.id,
@@ -175,8 +184,12 @@ class InvoiceService(Service):
         return invoice
 
     def mark_uncollectible(self, invoice_id: str, *, actor: Actor | None = None) -> Invoice:
-        """Mark an invoice as uncollectible."""
+        """Mark an open invoice as uncollectible."""
         invoice = self.get(invoice_id)
+        if invoice.status != InvoiceStatus.OPEN.value:
+            raise ConflictError(
+                f"cannot mark a {invoice.status!r} invoice uncollectible; expected open"
+            )
         invoice.status = InvoiceStatus.UNCOLLECTIBLE.value
         self.uow.invoices.update_invoice(invoice)
         self.uow.flush()
@@ -195,10 +208,17 @@ class InvoiceService(Service):
     ) -> Payment:
         """Record an offline payment and update the invoice balance."""
         invoice = self.get(invoice_id)
-        if invoice.status in {InvoiceStatus.VOID.value, InvoiceStatus.UNCOLLECTIBLE.value}:
-            raise ConflictError(f"cannot pay a {invoice.status!r} invoice")
+        if invoice.status not in _PAYABLE:
+            raise ConflictError(
+                f"cannot pay a {invoice.status!r} invoice; only open invoices are payable"
+            )
         if amount_minor <= 0:
             raise ValidationError("payment amount must be positive")
+        remaining = invoice.total_minor - invoice.amount_paid_minor
+        if amount_minor > remaining:
+            raise ValidationError(
+                f"payment {amount_minor} exceeds the remaining balance {remaining}"
+            )
         payment = Payment(
             id=new_ulid(),
             customer_id=invoice.customer_id,

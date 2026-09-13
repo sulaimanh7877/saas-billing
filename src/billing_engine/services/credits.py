@@ -23,7 +23,7 @@ class CreditService(Service):
         reference_id: str | None,
         actor: Actor | None,
     ) -> CreditEntry:
-        previous = self.uow.credits.balance(customer_id)
+        previous = self.uow.credits.balance(customer_id, currency)
         entry = CreditEntry(
             id=new_ulid(),
             customer_id=customer_id,
@@ -108,7 +108,7 @@ class CreditService(Service):
         customer = require(self.uow.customers.get(customer_id), "customer", customer_id)
         if amount_minor <= 0:
             raise ValidationError("consume amount must be positive")
-        if self.uow.credits.balance(customer.id) < amount_minor:
+        if self.uow.credits.balance_for_update(customer.id, customer.currency) < amount_minor:
             raise ConflictError("insufficient credit balance")
         return self._record(
             customer.id,
@@ -123,8 +123,8 @@ class CreditService(Service):
 
     def balance(self, customer_id: str) -> int:
         """Return a customer's current credit balance in minor units."""
-        require(self.uow.customers.get(customer_id), "customer", customer_id)
-        return self.uow.credits.balance(customer_id)
+        customer = require(self.uow.customers.get(customer_id), "customer", customer_id)
+        return self.uow.credits.balance(customer_id, customer.currency)
 
     def list_entries(self, customer_id: str) -> list[CreditEntry]:
         return self.uow.credits.list_entries(customer_id)

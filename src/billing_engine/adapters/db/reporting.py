@@ -20,7 +20,7 @@ def _monthly_minor(amount_minor: int, interval: str) -> int:
     if interval == "month":
         return amount_minor
     if interval == "year":
-        return round(amount_minor / 12)
+        return amount_minor // 12
     return 0
 
 
@@ -64,7 +64,9 @@ class SqlReportRepository:
             "currency": currency,
             "customers": int(customers),
             "subscriptions": counts,
-            "active_subscriptions": counts.get("active", 0) + counts.get("trialing", 0),
+            "active_subscriptions": counts.get("active", 0)
+            + counts.get("trialing", 0)
+            + counts.get("past_due", 0),
             "mrr_minor": self._mrr_minor(currency),
             "outstanding_invoices": self.outstanding_invoices(),
         }
@@ -118,13 +120,15 @@ class SqlReportRepository:
             .group_by(m.Feature.key)
         ).all()
         overrides = {str(key): int(count) for key, count in override_rows}
+        plan_counts = {str(key): int(count) for key, count in plan_rows}
+        keys = sorted(set(plan_counts) | set(overrides))
         return [
             {
-                "feature_key": str(key),
-                "plans": int(count),
-                "overrides": overrides.get(str(key), 0),
+                "feature_key": key,
+                "plans": plan_counts.get(key, 0),
+                "overrides": overrides.get(key, 0),
             }
-            for key, count in plan_rows
+            for key in keys
         ]
 
     def channel_revenue(self, currency: str) -> list[dict[str, Any]]:
@@ -138,7 +142,10 @@ class SqlReportRepository:
             .select_from(m.License)
             .join(m.Partner, m.Partner.id == m.License.partner_id)
             .join(m.Price, m.Price.plan_version_id == m.License.plan_version_id)
-            .where(m.Price.currency == currency)
+            .where(
+                m.Price.currency == currency,
+                m.License.status.in_(("issued", "active")),
+            )
             .group_by(m.Partner.id, m.Partner.name)
         ).all()
         return [

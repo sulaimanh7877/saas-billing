@@ -323,7 +323,11 @@ self-service portal, multi-prefix in one process, async DB backend, i18n.
   agreements, commission rules, license allocation/issuance, partner
   accounts/ledger, invoices, payments, payouts, statements, channel reporting).
 - Known limitation: one table prefix per process (see ADR 0001). Multi-prefix
-  support is deferred.
+  support is deferred. `BillingEngine` now rejects a second differing prefix
+  with a clear `ConfigurationError` rather than clobbering the first engine.
+- `EngineConfig.trial_days` is the fallback trial length when a plan version
+  defines none; `grace_period_days` keeps a past-due subscription accessible
+  after its period ends before it expires.
 - Next: payment gateway adapter (Stripe seam), proration, usage-based pricing,
   partner portal.
 
