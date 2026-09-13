@@ -24,7 +24,7 @@ from billing_engine.domain.value_objects import Money, new_ulid
 from billing_engine.naming import PrefixNamer
 from billing_engine.sdk import BillingEngine
 
-__version__ = "0.1.0.dev0"
+__version__ = "0.1.0"
 
 __all__ = [
     "AllocationExhaustedError",

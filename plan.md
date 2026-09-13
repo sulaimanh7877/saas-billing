@@ -314,3 +314,12 @@ self-service portal, multi-prefix in one process, async DB backend, i18n.
 - Dialect-safe aggregate SQL for reports.
 - Concurrency on allocation counters (row locking).
 - Audit atomicity under long transactions.
+
+## 11. Status
+
+- **v0.1.0 released** — M0-M8 complete: core billing, subscriptions,
+  entitlements, audit, reporting, events, embedded SDK, CLI, and REST API.
+- **v0.2.0 in progress** — channel & partner management (P1-P4).
+- Known limitation: one table prefix per process (see ADR 0001). Multi-prefix
+  support is deferred.
+

@@ -12,8 +12,9 @@ SQLite) and it manages its own **prefixed** tables alongside yours.
 - **Standalone** — run the Docker image and talk REST; or mount the FastAPI
   router inside your own app.
 
-> Status: **pre-release / planning.** See [`plan.md`](./plan.md) for the full
-> design and roadmap. The package has not been published yet.
+> Status: **v0.1.0 released** (core billing, entitlements, audit, analytics,
+> REST + SDK + CLI). Channel & partner management lands in v0.2.0. See
+> [`plan.md`](./plan.md) for the full design and roadmap.
 
 ---
 
@@ -78,13 +79,38 @@ billing migrate        # creates ONLY its prefixed tables
 ```
 
 ```python
-customer = billing.customers.create(external_id=str(user.id), email=user.email)
-
-if not billing.entitlements.can(customer.id, "api_access"):
-    raise PermissionError("Upgrade required")
-
-seats = billing.entitlements.limit(customer.id, "seats")
+with billing.transaction() as services:
+    customer = services.customers.create(external_id=str(user.id), email=user.email)
+    if not services.entitlements.can(customer.id, "api_access"):
+        raise PermissionError("Upgrade required")
+    seats = services.entitlements.limit(customer.id, "seats")
 ```
+
+Each `transaction()` commits on success and rolls back on error, writing audit
+and outbox rows atomically with the change.
+
+### Standalone REST service
+
+```bash
+export BILLING_DSN="postgresql://user:pass@localhost/mysaas"
+export BILLING_TABLE_PREFIX="acme_"
+export BILLING_API_KEY="a-long-random-secret"
+uvicorn billing_engine.server:create_server --factory --port 8000
+```
+
+Or with Docker:
+
+```bash
+docker build -t billing-engine .
+docker run -p 8000:8000 \
+  -e BILLING_DSN="postgresql://user:pass@host/mysaas" \
+  -e BILLING_TABLE_PREFIX="acme_" \
+  -e BILLING_API_KEY="a-long-random-secret" \
+  billing-engine
+```
+
+You can also mount the router into an existing FastAPI app:
+`create_app(engine, api_key=...)` or `include_router(billing_engine.adapters.api.app.router)`.
 
 That's the seam: one `external_id` link per customer plus `can()`/`limit()`
 calls where you gate features. Adopt modules incrementally — start with
@@ -98,8 +124,6 @@ Quality: ruff, mypy, pytest, GitHub Actions.
 
 ## Installation
 
-Not yet published. When available:
-
 ```bash
 pip install billing-engine
 ```
@@ -107,6 +131,7 @@ pip install billing-engine
 ## Documentation
 
 - [`plan.md`](./plan.md) — full design, data model, business rules, roadmap.
+- [`CHANGELOG.md`](./CHANGELOG.md) — release history.
 - [`AGENTS.md`](./AGENTS.md) — contributor and coding-agent conventions.
 
 ## Roadmap
