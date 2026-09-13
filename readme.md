@@ -147,7 +147,7 @@ pip install billing-engine
 
 ## Documentation
 
-Full documentation site: **https://sulaimanh7877.github.io/saas-billing/**
+Docs site (Astro + Starlight): **https://sulaimanh7877.github.io/saas-billing/**
 
 - [Quick start](https://sulaimanh7877.github.io/saas-billing/getting-started/quickstart/) — install, migrate, gate a feature.
 - [Tutorial](https://sulaimanh7877.github.io/saas-billing/getting-started/tutorial/) — build a feature-gated SaaS step by step.
@@ -155,6 +155,14 @@ Full documentation site: **https://sulaimanh7877.github.io/saas-billing/**
 - [`plan.md`](./plan.md) — full design, data model, business rules, roadmap.
 - [`CHANGELOG.md`](./CHANGELOG.md) — release history.
 - [`AGENTS.md`](./AGENTS.md) — contributor and coding-agent conventions.
+
+Run the docs locally:
+
+```bash
+npm --prefix docs install
+npm --prefix docs run dev     # http://localhost:4321/saas-billing/
+npm --prefix docs run build   # outputs to docs/dist
+```
 
 ### Install the agent skill
 

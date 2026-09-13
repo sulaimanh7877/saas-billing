@@ -9,8 +9,8 @@ dist/
 *.egg-info/
 .eggs/
 
-# Docs build
-site/
+# Docs build (Astro writes to docs/dist; .astro/ is generated)
+.astro/
 
 # Node
 node_modules/

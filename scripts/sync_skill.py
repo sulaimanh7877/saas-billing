@@ -1,14 +1,16 @@
-"""Keep the docs copy of the agent skill in sync with its canonical source.
+"""Keep the docs copies of the agent skill in sync with its canonical source.
 
 The canonical skill lives at ``skill/SKILL.md`` inside the npm package. The docs
-site serves a byte-for-byte copy at
-``docs/assets/skill/billing-engine-skill.txt`` so the "Use with a coding agent"
-page can offer a one-click copy/download. (The ``.txt`` extension keeps MkDocs
-from rendering it as a documentation page.)
+site consumes byte-for-byte copies:
+
+- ``docs/public/skill/billing-engine-skill.txt`` — served as a static file so the
+  skill page can offer one-click copy/download.
+- ``docs/src/assets/billing-engine-skill.txt`` — imported by the docs site to
+  render the full skill source inline.
 
 Usage::
 
-    python scripts/sync_skill.py           # write the docs copy
+    python scripts/sync_skill.py           # write the docs copies
     python scripts/sync_skill.py --check    # fail if out of date (CI)
 """
 
@@ -20,7 +22,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 SOURCE = ROOT / "skill" / "SKILL.md"
-TARGET = ROOT / "docs" / "assets" / "skill" / "billing-engine-skill.txt"
+TARGETS = (
+    ROOT / "docs" / "public" / "skill" / "billing-engine-skill.txt",
+    ROOT / "docs" / "src" / "assets" / "billing-engine-skill.txt",
+)
 
 
 def read(path: Path) -> str:
@@ -32,7 +37,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--check",
         action="store_true",
-        help="exit non-zero when the docs copy differs from the source",
+        help="exit non-zero when a docs copy differs from the source",
     )
     args = parser.parse_args(argv)
 
@@ -42,18 +47,19 @@ def main(argv: list[str] | None = None) -> int:
 
     content = read(SOURCE)
     if args.check:
-        if not TARGET.exists() or read(TARGET) != content:
-            print(
-                f"error: {TARGET} is out of date; run 'python scripts/sync_skill.py'",
-                file=sys.stderr,
-            )
+        stale = [target for target in TARGETS if not target.exists() or read(target) != content]
+        if stale:
+            for target in stale:
+                print(f"error: {target.relative_to(ROOT)} is out of date", file=sys.stderr)
+            print("run 'python scripts/sync_skill.py'", file=sys.stderr)
             return 1
-        print("skill docs copy is up to date")
+        print("skill docs copies are up to date")
         return 0
 
-    TARGET.parent.mkdir(parents=True, exist_ok=True)
-    TARGET.write_text(content, encoding="utf-8")
-    print(f"synced {SOURCE.relative_to(ROOT)} -> {TARGET.relative_to(ROOT)}")
+    for target in TARGETS:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(content, encoding="utf-8")
+        print(f"synced {SOURCE.relative_to(ROOT)} -> {target.relative_to(ROOT)}")
     return 0
 
 

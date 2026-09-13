@@ -1,0 +1,41 @@
+---
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+const raw = `${base}/skill/billing-engine-skill.txt`;
+---
+
+<div class="skill-actions">
+	<button type="button" class="sl-link-button primary" data-copy-skill={raw} data-label="Copy SKILL.md">
+		Copy SKILL.md
+	</button>
+	<a class="sl-link-button" href={raw} download="SKILL.md">Download</a>
+</div>
+
+<script>
+	document.addEventListener('click', (event) => {
+		const target = event.target;
+		if (!(target instanceof Element)) return;
+		const button = target.closest('[data-copy-skill]');
+		if (!(button instanceof HTMLElement)) return;
+
+		event.preventDefault();
+		const source = button.getAttribute('data-copy-skill');
+		if (!source) return;
+		const label = button.getAttribute('data-label') || button.textContent || '';
+
+		fetch(source, { cache: 'no-cache' })
+			.then((response) => {
+				if (!response.ok) throw new Error(`HTTP ${response.status}`);
+				return response.text();
+			})
+			.then((text) => navigator.clipboard.writeText(text))
+			.then(() => {
+				button.textContent = 'Copied to clipboard';
+				window.setTimeout(() => {
+					button.textContent = label;
+				}, 2000);
+			})
+			.catch(() => {
+				window.open(source, '_blank', 'noopener');
+			});
+	});
+</script>

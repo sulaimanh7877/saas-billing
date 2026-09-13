@@ -1,0 +1,32 @@
+/* Small, opinionated touches on top of Starlight. */
+
+:root {
+	--be-radius: 0.5rem;
+}
+
+/* Scrollable container for the full agent skill source. */
+.skill-source {
+	max-height: 34rem;
+	overflow: auto;
+	border: 1px solid var(--sl-color-hairline);
+	border-radius: var(--be-radius);
+	background: var(--sl-color-gray-6);
+	padding: 0 1rem;
+}
+
+.skill-source pre {
+	margin: 0;
+	background: transparent;
+}
+
+.skill-source code {
+	font-size: var(--sl-text-sm);
+}
+
+/* Inline "copy the skill" call to action. */
+.skill-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.75rem;
+	margin: 1.25rem 0;
+}
