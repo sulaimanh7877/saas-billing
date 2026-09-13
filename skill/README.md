@@ -66,7 +66,7 @@ with `--force` after upgrading `billing-engine`.
 
 1. Edit `skill/SKILL.md` and keep the version in sync with `billing-engine`.
 2. Run `python scripts/sync_skill.py` from the repository root to refresh the
-   docs copy and commit both.
+   docs copies, and commit them with the skill change.
 3. Tag a release as `skill-v<version>` (for example `skill-v0.2.0`) and push.
    The `publish-skill` workflow publishes to npm.
 

@@ -9,14 +9,19 @@ from billing_engine import __version__
 
 ROOT = Path(__file__).resolve().parent.parent
 SKILL = ROOT / "skill" / "SKILL.md"
-DOCS_COPY = ROOT / "docs" / "assets" / "skill" / "billing-engine-skill.txt"
+DOCS_COPIES = (
+    ROOT / "docs" / "public" / "skill" / "billing-engine-skill.txt",
+    ROOT / "docs" / "src" / "assets" / "billing-engine-skill.txt",
+)
 PACKAGE = ROOT / "skill" / "package.json"
 
 
 def test_skill_is_mirrored_into_docs() -> None:
     assert SKILL.exists(), "canonical skill is missing"
-    assert DOCS_COPY.exists(), "docs copy is missing; run scripts/sync_skill.py"
-    assert SKILL.read_text(encoding="utf-8") == DOCS_COPY.read_text(encoding="utf-8")
+    expected = SKILL.read_text(encoding="utf-8")
+    for copy in DOCS_COPIES:
+        assert copy.exists(), f"docs copy missing at {copy}; run scripts/sync_skill.py"
+        assert copy.read_text(encoding="utf-8") == expected
 
 
 def test_skill_has_valid_frontmatter() -> None:

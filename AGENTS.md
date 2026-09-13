@@ -109,9 +109,10 @@ pytest -m integration    # Postgres/MySQL/SQLite integration tests
 billing migrate          # apply migrations (requires table_prefix)
 billing seed             # seed demo data
 python scripts/sync_skill.py          # sync the agent skill into docs assets
-python scripts/sync_skill.py --check  # verify the docs skill copy is current
-mkdocs serve                          # preview the docs site (pip install -e ".[docs]")
-mkdocs build --strict                 # build docs; must be warning-free
+python scripts/sync_skill.py --check  # verify the docs skill copies are current
+npm --prefix docs ci                  # install the Astro/Starlight docs deps
+npm --prefix docs run dev             # preview the docs site at localhost:4321
+npm --prefix docs run build           # build the docs site to docs/dist
 ```
 
 Always run `ruff check`, `mypy`, and `pytest` before considering a task done.
@@ -167,5 +168,6 @@ src/billing_engine/   package
 migrations/           prefix-aware migration files
 tests/                unit + integration
 examples/             embedded + standalone demos
-docs/                 ADRs and guides
+docs/                 Astro + Starlight documentation site (content in src/content/docs)
+skill/                coding-agent skill, published to npm as billing-engine-skill
 ```

@@ -7,15 +7,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
-- **Documentation site** (MkDocs Material) with a quick start, a step-by-step
-  tutorial, guides for every subsystem, deployment and reference pages, and an
+- **Documentation site** built with **Astro + Starlight** (the stack behind
+  `docs.astro.build`): a quick start, a step-by-step tutorial, guides for every
+  subsystem, deployment and reference pages, an architecture section, and an
   FAQ.
 - **Agent skill** shipped as the `billing-engine-skill` npm package: a
   `SKILL.md` with the API cheatsheet, locked rules, and pitfalls, plus a
   dependency-free installer (`npx billing-engine-skill`). A byte-for-byte copy
   is served on the docs site with one-click copy/download.
 - `scripts/sync_skill.py` and an integrity test to keep the npm skill and its
-  docs mirror in sync.
+  docs copies in sync.
 - GitHub Actions workflows to build/deploy the docs to GitHub Pages and to
   publish the skill to npm.
 
