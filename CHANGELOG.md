@@ -6,9 +6,32 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-### Planned
-- Channel & partner management (v0.2.0): partners, agreements, license
-  allocation, partner accounts/ledger, invoices, payouts, and statements.
+## [0.2.0] - 2026-09-13
+
+Channel & partner management: sell and manage licenses through distributors,
+agents, and resellers, and track the money you owe each other.
+
+### Added
+- **Partners**: distributors, agents, and resellers, hierarchy-ready via
+  `parent_partner_id`.
+- **Agreements** with three money models: `wholesale_prepaid`, `consignment`,
+  and `agency_commission`, plus optional wholesale discounts.
+- **Commission engine** (pure): flat, tiered/volume, and multi-level bases,
+  expressed in basis points.
+- **License allocation & issuance**: authorize a partner with N licenses for a
+  plan version; issuing creates/attributes the end customer, starts their
+  subscription, consumes allocation capacity, and posts ledger entries.
+- **Partner accounts & ledger**: prepaid, receivable, and payable balances with
+  an append-only ledger (charges, payments, commissions, adjustments, refunds,
+  write-offs, payouts).
+- **Partner invoices, payments, payouts, and statements** for settlement.
+- **Channel reporting**: licenses and value grouped by partner.
+- **REST endpoints** for partners, allocations, licenses, accounts, ledger,
+  statements, invoices, payouts, and `/reports/channel`.
+
+### Changed
+- Foreign-key naming convention now derives the referred table from the target
+  name, supporting self-referential keys (partner hierarchy).
 
 ## [0.1.0] - 2026-09-13
 
@@ -41,5 +64,6 @@ table prefix.
 - **CI**: GitHub Actions matrix over Python 3.11-3.13 running ruff, mypy, and
   pytest.
 
-[Unreleased]: https://github.com/sulaimanh7877/saas-billing/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/sulaimanh7877/saas-billing/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/sulaimanh7877/saas-billing/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/sulaimanh7877/saas-billing/releases/tag/v0.1.0

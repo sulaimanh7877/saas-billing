@@ -319,7 +319,11 @@ self-service portal, multi-prefix in one process, async DB backend, i18n.
 
 - **v0.1.0 released** — M0-M8 complete: core billing, subscriptions,
   entitlements, audit, reporting, events, embedded SDK, CLI, and REST API.
-- **v0.2.0 in progress** — channel & partner management (P1-P4).
+- **v0.2.0 released** — P1-P4 complete: channel & partner management (partners,
+  agreements, commission rules, license allocation/issuance, partner
+  accounts/ledger, invoices, payments, payouts, statements, channel reporting).
 - Known limitation: one table prefix per process (see ADR 0001). Multi-prefix
   support is deferred.
+- Next: payment gateway adapter (Stripe seam), proration, usage-based pricing,
+  partner portal.
 
