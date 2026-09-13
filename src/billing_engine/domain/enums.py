@@ -107,3 +107,87 @@ class EventStatus(StrEnum):
     PENDING = "pending"
     DELIVERED = "delivered"
     FAILED = "failed"
+
+
+class PartnerType(StrEnum):
+    """Kinds of channel partners."""
+
+    DISTRIBUTOR = "distributor"
+    AGENT = "agent"
+    RESELLER = "reseller"
+
+
+class PartnerStatus(StrEnum):
+    """Partner account state."""
+
+    ACTIVE = "active"
+    INACTIVE = "inactive"
+
+
+class MoneyModel(StrEnum):
+    """How money flows between the vendor and a partner."""
+
+    WHOLESALE_PREPAID = "wholesale_prepaid"
+    CONSIGNMENT = "consignment"
+    AGENCY_COMMISSION = "agency_commission"
+
+
+class CommissionBasis(StrEnum):
+    """How partner commission is calculated."""
+
+    FLAT = "flat"
+    TIERED = "tiered"
+    MULTI_LEVEL = "multi_level"
+
+
+class AllocationStatus(StrEnum):
+    """License allocation state."""
+
+    ACTIVE = "active"
+    CLOSED = "closed"
+
+
+class LicenseStatus(StrEnum):
+    """State of an individual issued license."""
+
+    AVAILABLE = "available"
+    ISSUED = "issued"
+    ACTIVE = "active"
+    EXPIRED = "expired"
+    REVOKED = "revoked"
+
+
+class AccountType(StrEnum):
+    """Meaning of a partner account balance."""
+
+    PREPAID = "prepaid"
+    RECEIVABLE = "receivable"
+    PAYABLE = "payable"
+
+
+class PartnerLedgerEntryType(StrEnum):
+    """Partner ledger entry kinds."""
+
+    CHARGE = "charge"
+    PAYMENT_RECEIVED = "payment_received"
+    COMMISSION_EARNED = "commission_earned"
+    ADJUSTMENT = "adjustment"
+    REFUND = "refund"
+    WRITE_OFF = "write_off"
+    PAYOUT = "payout"
+
+
+class StatementStatus(StrEnum):
+    """Partner statement lifecycle."""
+
+    DRAFT = "draft"
+    SENT = "sent"
+    SETTLED = "settled"
+
+
+class PayoutStatus(StrEnum):
+    """Partner payout lifecycle."""
+
+    DRAFT = "draft"
+    PAID = "paid"
+    VOID = "void"

@@ -577,6 +577,287 @@ def _build_router() -> Any:
     ) -> list[dict[str, Any]]:
         return [snapshot(item) for item in services.uow.events.list_pending(utcnow(), limit)]
 
+    # --- Channel & Partners -------------------------------------------------
+
+    @api.post("/partners", tags=["partners"])
+    def create_partner(
+        body: schemas.PartnerCreate,
+        services: Services = Depends(get_services),
+        actor: Actor = Depends(get_actor),
+    ) -> Any:
+        return snapshot(
+            services.partners.create(
+                body.name,
+                type=body.type,
+                external_id=body.external_id,
+                email=body.email,
+                phone=body.phone,
+                currency=body.currency,
+                parent_partner_id=body.parent_partner_id,
+                attributes=body.attributes,
+                actor=actor,
+            )
+        )
+
+    @api.get("/partners", tags=["partners"])
+    def list_partners(
+        limit: int = Query(100, ge=1, le=500),
+        offset: int = Query(0, ge=0),
+        services: Services = Depends(get_services),
+    ) -> list[dict[str, Any]]:
+        return [
+            snapshot(item) for item in services.partners.list_partners(limit=limit, offset=offset)
+        ]
+
+    @api.get("/partners/{partner_id}", tags=["partners"])
+    def get_partner(partner_id: str, services: Services = Depends(get_services)) -> Any:
+        return snapshot(services.partners.get(partner_id))
+
+    @api.post("/partners/{partner_id}/commission-rules", tags=["partners"])
+    def create_commission_rule(
+        partner_id: str,
+        body: schemas.CommissionRuleCreate,
+        services: Services = Depends(get_services),
+        actor: Actor = Depends(get_actor),
+    ) -> Any:
+        services.partners.get(partner_id)
+        return snapshot(
+            services.partners.create_commission_rule(
+                basis=body.basis,
+                rate_bps=body.rate_bps,
+                tiers=body.tiers,
+                levels=body.levels,
+                actor=actor,
+            )
+        )
+
+    @api.post("/partners/{partner_id}/agreements", tags=["partners"])
+    def create_agreement(
+        partner_id: str,
+        body: schemas.AgreementCreate,
+        services: Services = Depends(get_services),
+        actor: Actor = Depends(get_actor),
+    ) -> Any:
+        return snapshot(
+            services.partners.create_agreement(
+                partner_id,
+                money_model=body.money_model,
+                currency=body.currency,
+                discount_bps=body.discount_bps,
+                plan_id=body.plan_id,
+                commission_rule_id=body.commission_rule_id,
+                effective_from=body.effective_from,
+                effective_to=body.effective_to,
+                actor=actor,
+            )
+        )
+
+    @api.get("/partners/{partner_id}/agreements", tags=["partners"])
+    def list_agreements(
+        partner_id: str, services: Services = Depends(get_services)
+    ) -> list[dict[str, Any]]:
+        return [snapshot(item) for item in services.partners.list_agreements(partner_id)]
+
+    @api.post("/partners/{partner_id}/allocations", tags=["licenses"])
+    def allocate_licenses(
+        partner_id: str,
+        body: schemas.AllocationCreate,
+        services: Services = Depends(get_services),
+        actor: Actor = Depends(get_actor),
+    ) -> Any:
+        return snapshot(
+            services.licenses.allocate(
+                partner_id,
+                body.plan_version_id,
+                body.quantity,
+                agreement_id=body.agreement_id,
+                parent_allocation_id=body.parent_allocation_id,
+                actor=actor,
+            )
+        )
+
+    @api.get("/partners/{partner_id}/allocations", tags=["licenses"])
+    def list_allocations(
+        partner_id: str, services: Services = Depends(get_services)
+    ) -> list[dict[str, Any]]:
+        return [snapshot(item) for item in services.licenses.list_allocations(partner_id)]
+
+    @api.post("/allocations/{allocation_id}/licenses", tags=["licenses"])
+    def issue_license(
+        allocation_id: str,
+        body: schemas.LicenseIssue,
+        services: Services = Depends(get_services),
+        actor: Actor = Depends(get_actor),
+    ) -> Any:
+        return snapshot(
+            services.licenses.issue(
+                allocation_id,
+                customer_id=body.customer_id,
+                external_id=body.external_id,
+                email=body.email,
+                name=body.name,
+                actor=actor,
+            )
+        )
+
+    @api.get("/partners/{partner_id}/licenses", tags=["licenses"])
+    def list_licenses(
+        partner_id: str, services: Services = Depends(get_services)
+    ) -> list[dict[str, Any]]:
+        return [snapshot(item) for item in services.licenses.list_for_partner(partner_id)]
+
+    @api.post("/licenses/{license_id}/revoke", tags=["licenses"])
+    def revoke_license(
+        license_id: str,
+        body: schemas.ReasonRequest | None = None,
+        services: Services = Depends(get_services),
+        actor: Actor = Depends(get_actor),
+    ) -> Any:
+        reason = body.reason if body else None
+        return snapshot(services.licenses.revoke(license_id, reason=reason, actor=actor))
+
+    @api.post("/partners/{partner_id}/prefund", tags=["partner-accounts"])
+    def prefund_partner(
+        partner_id: str,
+        body: schemas.PrefundRequest,
+        services: Services = Depends(get_services),
+        actor: Actor = Depends(get_actor),
+    ) -> Any:
+        return snapshot(
+            services.partner_accounts.prefund(
+                partner_id,
+                body.amount_minor,
+                currency=body.currency,
+                reason=body.reason,
+                actor=actor,
+            )
+        )
+
+    @api.post("/partners/{partner_id}/payments", tags=["partner-accounts"])
+    def record_partner_payment(
+        partner_id: str,
+        body: schemas.PartnerPaymentRequest,
+        services: Services = Depends(get_services),
+        actor: Actor = Depends(get_actor),
+    ) -> Any:
+        return snapshot(
+            services.partner_accounts.record_payment(
+                partner_id,
+                body.amount_minor,
+                currency=body.currency,
+                method=body.method,
+                reference=body.reference,
+                actor=actor,
+            )
+        )
+
+    @api.get("/partners/{partner_id}/accounts", tags=["partner-accounts"])
+    def partner_accounts(
+        partner_id: str, services: Services = Depends(get_services)
+    ) -> list[dict[str, Any]]:
+        return [snapshot(item) for item in services.partner_accounts.accounts(partner_id)]
+
+    @api.get("/partners/{partner_id}/ledger", tags=["partner-accounts"])
+    def partner_ledger(
+        partner_id: str,
+        currency: str | None = None,
+        services: Services = Depends(get_services),
+    ) -> list[dict[str, Any]]:
+        return [
+            snapshot(item)
+            for item in services.partner_accounts.entries(partner_id, currency=currency)
+        ]
+
+    @api.post("/partners/{partner_id}/statements", tags=["partner-accounts"])
+    def create_statement(
+        partner_id: str,
+        body: schemas.StatementCreate,
+        services: Services = Depends(get_services),
+        actor: Actor = Depends(get_actor),
+    ) -> Any:
+        return snapshot(
+            services.partner_accounts.generate_statement(
+                partner_id,
+                body.period_start,
+                body.period_end,
+                currency=body.currency,
+                actor=actor,
+            )
+        )
+
+    @api.get("/partners/{partner_id}/statements", tags=["partner-accounts"])
+    def list_statements(
+        partner_id: str, services: Services = Depends(get_services)
+    ) -> list[dict[str, Any]]:
+        return [snapshot(item) for item in services.partner_accounts.list_statements(partner_id)]
+
+    @api.post("/partners/{partner_id}/invoices", tags=["partner-accounts"])
+    def create_partner_invoice(
+        partner_id: str,
+        body: schemas.PartnerInvoiceCreate,
+        services: Services = Depends(get_services),
+        actor: Actor = Depends(get_actor),
+    ) -> Any:
+        return snapshot(
+            services.partner_accounts.create_invoice(
+                partner_id,
+                lines=[item.model_dump() for item in body.lines],
+                currency=body.currency,
+                due_date=body.due_date,
+                notes=body.notes,
+                finalize=body.finalize,
+                actor=actor,
+            )
+        )
+
+    @api.post("/partner-invoices/{invoice_id}/payments", tags=["partner-accounts"])
+    def pay_partner_invoice(
+        invoice_id: str,
+        body: schemas.PaymentCreate,
+        services: Services = Depends(get_services),
+        actor: Actor = Depends(get_actor),
+    ) -> Any:
+        return snapshot(
+            services.partner_accounts.record_invoice_payment(
+                invoice_id,
+                body.amount_minor,
+                method=body.method,
+                reference=body.reference,
+                actor=actor,
+            )
+        )
+
+    @api.post("/partners/{partner_id}/payouts", tags=["partner-accounts"])
+    def create_payout(
+        partner_id: str,
+        body: schemas.PayoutCreate,
+        services: Services = Depends(get_services),
+        actor: Actor = Depends(get_actor),
+    ) -> Any:
+        return snapshot(
+            services.partner_accounts.create_payout(
+                partner_id,
+                lines=body.lines,
+                currency=body.currency,
+                reference=body.reference,
+                actor=actor,
+            )
+        )
+
+    @api.post("/payouts/{payout_id}/pay", tags=["partner-accounts"])
+    def pay_payout(
+        payout_id: str,
+        services: Services = Depends(get_services),
+        actor: Actor = Depends(get_actor),
+    ) -> Any:
+        return snapshot(services.partner_accounts.pay_payout(payout_id, actor=actor))
+
+    @api.get("/reports/channel", tags=["reports"])
+    def report_channel(
+        currency: str | None = None, services: Services = Depends(get_services)
+    ) -> list[dict[str, Any]]:
+        return services.uow.reports.channel_revenue((currency or services.default_currency).upper())
+
     return api
 
 
