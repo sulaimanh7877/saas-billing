@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "billing-engine"
-version = "0.1.0"
+version = "0.2.0"
 description = "Self-hostable billing, subscriptions, entitlements, audit, analytics, and channel/partner sales for any SaaS."
 readme = "readme.md"
 license = { file = "LICENSE" }

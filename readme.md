@@ -12,8 +12,8 @@ SQLite) and it manages its own **prefixed** tables alongside yours.
 - **Standalone** — run the Docker image and talk REST; or mount the FastAPI
   router inside your own app.
 
-> Status: **v0.1.0 released** (core billing, entitlements, audit, analytics,
-> REST + SDK + CLI). Channel & partner management lands in v0.2.0. See
+> Status: **v0.2.0 released** — core billing, entitlements, audit, analytics,
+> and channel/partner management, with REST + SDK + CLI. See
 > [`plan.md`](./plan.md) for the full design and roadmap.
 
 ---
@@ -48,7 +48,7 @@ model, or force a separate database. This project instead:
   receivables.
 - **Events outbox + webhooks** so your app can react to changes.
 
-### Channel & Partners (v0.2)
+### Channel & Partners
 - Distributors/agents with agreements (hierarchy-ready, single-level first).
 - **License allocation** — approved quantities with `available = allocated − issued`.
 - Issue licenses to end customers; each issue starts a subscription and updates
@@ -116,6 +116,19 @@ That's the seam: one `external_id` link per customer plus `can()`/`limit()`
 calls where you gate features. Adopt modules incrementally — start with
 entitlements, add billing, add partners later.
 
+### Partner sales example
+
+```python
+with billing.transaction() as services:
+    partner = services.partners.create("Acme Reseller", type="reseller")
+    agreement = services.partners.create_agreement(partner.id, money_model="consignment")
+    allocation = services.licenses.allocate(partner.id, version.id, 500, agreement_id=agreement.id)
+
+    # A partner issues a license to an end customer.
+    license_ = services.licenses.issue(allocation.id, external_id=str(new_user.id))
+    print(services.licenses.available(allocation), services.partner_accounts.balances(partner.id))
+```
+
 ## Tech Stack
 
 Python 3.11+ · SQLAlchemy 2.0 (sync-first) · PostgreSQL / MySQL / SQLite ·
@@ -136,8 +149,10 @@ pip install billing-engine
 
 ## Roadmap
 
-- **v0.1.0** — core billing, entitlements, audit, reporting, REST + SDK + CLI.
-- **v0.2.0** — channel & partner management.
+- **v0.1.0** — core billing, entitlements, audit, reporting, REST + SDK + CLI. ✅
+- **v0.2.0** — channel & partner management. ✅
+- **Next** — live payment gateway adapter (Stripe seam), proration, usage-based
+  pricing, and a partner self-service portal.
 
 ## Contributing
 
