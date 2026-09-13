@@ -1,0 +1,156 @@
+# Subscriptions
+
+A subscription ties a customer to a plan version and drives their access over
+time. This page covers creation, the lifecycle transitions, extensions, and the
+`process_due` job.
+
+## Create
+
+```python
+with billing.transaction() as services:
+    subscription = services.subscriptions.create(
+        customer.id,
+        version.id,
+        currency="USD",          # optional; picks the matching price
+        quantity=1,              # seats/units
+        collection_method="manual",
+        start_at=None,           # defaults to now (UTC)
+    )
+```
+
+| Argument | Notes |
+|---|---|
+| `customer_id`, `plan_version_id` | Required. The version must be published. |
+| `price_id` / `currency` | Selects a price; defaults to the version's first price |
+| `trial_days` | Overrides the plan's trial; `None` falls back to the plan, then `EngineConfig.trial_days` |
+| `quantity` | Number of units, minimum `1` |
+| `collection_method` | `manual` (default) or `automatic` |
+| `start_at` | UTC datetime; defaults to now |
+
+The starting status is `trialing` when the effective trial is greater than zero,
+otherwise `active`.
+
+## Statuses
+
+| Status | Meaning |
+|---|---|
+| `trialing` | In a trial; access is granted |
+| `active` | Paying / in the current period; access granted |
+| `past_due` | Period ended and inside the grace window; access granted |
+| `paused` | Temporarily suspended |
+| `canceled` | Canceled immediately (or scheduled at period end) |
+| `expired` | Fully ended; no access |
+
+`services.entitlements` grants access for `trialing`, `active`, and `past_due`.
+
+## Transitions
+
+All of these write a `subscription_adjustment`, an audit row, and an outbox
+event.
+
+=== "Extend"
+
+    Move the period end forward by days, months, or a target date. Also revives
+    an `expired` subscription.
+
+    ```python
+    services.subscriptions.extend(sub.id, days=14, reason="goodwill")
+    services.subscriptions.extend(sub.id, months=1)
+    services.subscriptions.extend(sub.id, until=datetime(2026, 12, 31, tzinfo=UTC))
+    ```
+
+=== "Extend trial"
+
+    ```python
+    services.subscriptions.extend_trial(sub.id, days=7, reason="onboarding")
+    ```
+
+=== "Pause / resume"
+
+    ```python
+    services.subscriptions.pause(sub.id, until=datetime(2026, 10, 1, tzinfo=UTC))
+    services.subscriptions.resume(sub.id, reason="customer returned")
+    ```
+
+=== "Cancel"
+
+    Cancels at period end by default; pass `at_period_end=False` to cancel now.
+
+    ```python
+    services.subscriptions.cancel(sub.id, reason="churn")                 # at period end
+    services.subscriptions.cancel(sub.id, at_period_end=False, reason="fraud")
+    ```
+
+=== "Reactivate / change plan"
+
+    ```python
+    services.subscriptions.reactivate(sub.id, reason="won back")
+    services.subscriptions.change_plan(sub.id, new_version.id, reason="upgrade")
+    ```
+
+    `change_plan` is instant and **does not prorate** in this version. The next
+    renewal uses the new plan's interval.
+
+## `renew` and `process_due`
+
+`renew(subscription_id)` advances a due trialing/active/past_due subscription
+into its next period. `process_due()` applies that to **everything due** and also
+expires anything past its grace window. It returns the ids it renewed.
+
+```python
+from datetime import UTC, datetime
+
+with billing.transaction() as services:
+    renewed = services.subscriptions.process_due(now=datetime(2026, 3, 1, tzinfo=UTC))
+```
+
+!!! warning "Run it on a schedule"
+
+    The engine does not schedule work for you. Call `process_due()` from cron, a
+    worker, or your task runner at least daily.
+
+### Grace period
+
+When `EngineConfig.grace_period_days` is greater than zero, a subscription whose
+period ends without renewal first moves to `past_due` with a `grace_until`
+timestamp. It keeps access during grace, then `process_due()` expires it.
+With the default of `0`, it expires on the next due run.
+
+### One-time subscriptions
+
+A `one_time` price has no next period. When its period ends, `process_due()`
+expires it (after grace, if configured).
+
+## Adjustments
+
+Every transition is recorded immutably:
+
+```python
+for adjustment in services.uow.subscriptions.list_adjustments(sub.id):
+    print(adjustment.adjustment_type, adjustment.delta_days, adjustment.reason)
+```
+
+Types include `extend`, `trial_extend`, `pause`, `resume`, `cancel`, `renew`,
+`reactivate`, `expire`, `plan_change`, and `set_period_end`.
+
+## Reading subscriptions
+
+```python
+services.subscriptions.get(sub_id)
+services.subscriptions.list_for_customer(customer.id)
+services.subscriptions.list_due(before=datetime.now(UTC))   # due by a moment
+```
+
+## Exceptions
+
+| Situation | Error |
+|---|---|
+| Version not published | `ConflictError` |
+| Invalid `collection_method` or `quantity < 1` | `ValidationError` |
+| Extend with no `days`/`months`/`until`, or a past date | `ValidationError` |
+| Renewing a non-renewable status | `ConflictError` |
+
+## Next
+
+- [Entitlements](entitlements.md) — what the subscription grants.
+- [Invoices & credits](billing.md) — turn subscriptions into money.

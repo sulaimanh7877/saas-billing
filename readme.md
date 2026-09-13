@@ -147,9 +147,24 @@ pip install billing-engine
 
 ## Documentation
 
+Full documentation site: **https://sulaimanh7877.github.io/saas-billing/**
+
+- [Quick start](https://sulaimanh7877.github.io/saas-billing/getting-started/quickstart/) — install, migrate, gate a feature.
+- [Tutorial](https://sulaimanh7877.github.io/saas-billing/getting-started/tutorial/) — build a feature-gated SaaS step by step.
+- [Use with a coding agent](https://sulaimanh7877.github.io/saas-billing/guides/agent-skill/) — install the npm skill.
 - [`plan.md`](./plan.md) — full design, data model, business rules, roadmap.
 - [`CHANGELOG.md`](./CHANGELOG.md) — release history.
 - [`AGENTS.md`](./AGENTS.md) — contributor and coding-agent conventions.
+
+### Install the agent skill
+
+```bash
+npx billing-engine-skill            # -> ./.claude/skills/billing-engine/SKILL.md
+npx billing-engine-skill --dest .opencode/skill
+```
+
+The skill teaches a coding agent the API, the locked rules (integer money, UTC,
+table prefix, explicit renewals), and the common pitfalls.
 
 ## Roadmap
 

@@ -108,6 +108,10 @@ pytest                   # unit tests
 pytest -m integration    # Postgres/MySQL/SQLite integration tests
 billing migrate          # apply migrations (requires table_prefix)
 billing seed             # seed demo data
+python scripts/sync_skill.py          # sync the agent skill into docs assets
+python scripts/sync_skill.py --check  # verify the docs skill copy is current
+mkdocs serve                          # preview the docs site (pip install -e ".[docs]")
+mkdocs build --strict                 # build docs; must be warning-free
 ```
 
 Always run `ruff check`, `mypy`, and `pytest` before considering a task done.
