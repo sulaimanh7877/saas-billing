@@ -214,12 +214,14 @@ create subscription on agreed plan version → post ledger entry per money model
 ```python
 from billing_engine import BillingEngine, EngineConfig
 
-billing = BillingEngine(EngineConfig(
-    dsn="postgresql://user:pass@localhost/mysaas",
-    table_prefix="acme_",
-    default_currency="USD",
-    grace_period_days=3,
-))
+billing = BillingEngine(
+    EngineConfig(
+        dsn="postgresql://user:pass@localhost/mysaas",
+        table_prefix="acme_",
+        default_currency="USD",
+        grace_period_days=3,
+    )
+)
 
 billing.customers.create(external_id=str(user.id), email=user.email)
 billing.subscriptions.create(customer_id, plan_version_id, trial_days=14)

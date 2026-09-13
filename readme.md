@@ -63,12 +63,14 @@ model, or force a separate database. This project instead:
 ```python
 from billing_engine import BillingEngine, EngineConfig
 
-billing = BillingEngine(EngineConfig(
-    dsn="postgresql://user:pass@localhost/mysaas",
-    table_prefix="acme_",          # required, no default
-    default_currency="USD",
-    grace_period_days=3,
-))
+billing = BillingEngine(
+    EngineConfig(
+        dsn="postgresql://user:pass@localhost/mysaas",
+        table_prefix="acme_",  # required, no default
+        default_currency="USD",
+        grace_period_days=3,
+    )
+)
 ```
 
 ```bash
