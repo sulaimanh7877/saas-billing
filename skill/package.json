@@ -1,0 +1,41 @@
+{
+  "name": "billing-engine-skill",
+  "version": "0.2.0",
+  "description": "Agent skill for billing-engine: teach a coding agent to add subscriptions, entitlements, invoices, credits, and channel/partner sales to a Python SaaS.",
+  "keywords": [
+    "billing",
+    "billing-engine",
+    "skill",
+    "agent",
+    "claude",
+    "opencode",
+    "subscriptions",
+    "entitlements",
+    "saas"
+  ],
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "billing-engine-skill": "bin/billing-engine-skill.mjs"
+  },
+  "files": [
+    "SKILL.md",
+    "bin/",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sulaimanh7877/saas-billing.git",
+    "directory": "skill"
+  },
+  "homepage": "https://sulaimanh7877.github.io/saas-billing/guides/agent-skill/",
+  "bugs": {
+    "url": "https://github.com/sulaimanh7877/saas-billing/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
