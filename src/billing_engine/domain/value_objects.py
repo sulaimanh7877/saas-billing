@@ -28,6 +28,17 @@ def utcnow() -> datetime:
     return datetime.now(UTC)
 
 
+def as_utc(value: datetime) -> datetime:
+    """Return ``value`` as a timezone-aware UTC datetime.
+
+    Naive datetimes are interpreted as UTC so callers never mix aware and naive
+    values (which raises ``TypeError`` on comparison).
+    """
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
+
+
 def _encode_ulid(value: int, length: int) -> str:
     chars: list[str] = []
     for _ in range(length):

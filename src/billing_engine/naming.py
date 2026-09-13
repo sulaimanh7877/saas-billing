@@ -34,6 +34,7 @@ class PrefixNamer:
                 "used for the engine's tables"
             )
         normalized = prefix if prefix.endswith("_") else f"{prefix}_"
+        normalized = re.sub(r"_+$", "_", normalized)
         if not _IDENTIFIER_RE.match(normalized):
             raise ConfigurationError(
                 f"invalid table_prefix {prefix!r}: expected lowercase letters, "

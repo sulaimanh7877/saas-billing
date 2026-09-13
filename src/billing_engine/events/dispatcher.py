@@ -27,10 +27,12 @@ class EventDispatcher:
         handler: EventHandler,
         *,
         backoff_seconds: int = 60,
+        max_attempts: int = 5,
     ) -> None:
         self.session_factory = session_factory
         self.handler = handler
         self.backoff_seconds = backoff_seconds
+        self.max_attempts = max_attempts
 
     def dispatch_pending(self, limit: int = 100) -> int:
         """Deliver up to ``limit`` pending events; return the number delivered."""
@@ -42,10 +44,14 @@ class EventDispatcher:
                 try:
                     self.handler(event)
                 except Exception as exc:
-                    retry_at = utcnow() + timedelta(
-                        seconds=self.backoff_seconds * max(1, event.attempts + 1)
+                    attempts = event.attempts + 1
+                    retry_at = utcnow() + timedelta(seconds=self.backoff_seconds * max(1, attempts))
+                    uow.events.mark_failed(
+                        event.id,
+                        str(exc),
+                        retry_at,
+                        final=attempts >= self.max_attempts,
                     )
-                    uow.events.mark_failed(event.id, str(exc), retry_at)
                 else:
                     uow.events.mark_delivered(event.id, utcnow())
                     delivered += 1

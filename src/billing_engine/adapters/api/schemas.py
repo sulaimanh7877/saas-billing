@@ -54,6 +54,7 @@ class PlanVersionCreate(BaseModel):
     prices: list[PriceIn]
     trial_days: int = 0
     entitlements: list[EntitlementIn] = Field(default_factory=list)
+    is_published: bool = True
 
 
 class CustomPlanCreate(BaseModel):
@@ -75,6 +76,7 @@ class SubscriptionCreate(BaseModel):
     currency: str | None = None
     trial_days: int | None = None
     quantity: int = 1
+    collection_method: str = "manual"
     start_at: datetime | None = None
 
 

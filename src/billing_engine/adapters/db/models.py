@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from billing_engine.adapters.db.base import Base
@@ -62,6 +62,7 @@ class Plan(IdMixin, TimestampMixin, Base):
 
 class PlanVersion(IdMixin, CreatedAtMixin, Base):
     __tablename__ = "plan_versions"
+    __table_args__ = (UniqueConstraint("plan_id", "version"),)
 
     plan_id: Mapped[str] = mapped_column(ForeignKey("plans.id"), index=True, nullable=False)
     version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)

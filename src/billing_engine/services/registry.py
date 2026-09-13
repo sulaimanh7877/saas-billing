@@ -24,37 +24,69 @@ class Services:
         *,
         default_currency: str = "USD",
         grace_period_days: int = 0,
+        trial_days: int = 0,
     ) -> None:
         self.uow = uow
         self.default_currency = default_currency
         self.grace_period_days = grace_period_days
+        self.trial_days = trial_days
         self.customers = CustomerService(
-            uow, default_currency=default_currency, grace_period_days=grace_period_days
+            uow,
+            default_currency=default_currency,
+            grace_period_days=grace_period_days,
+            trial_days=trial_days,
         )
         self.catalog = CatalogService(
-            uow, default_currency=default_currency, grace_period_days=grace_period_days
+            uow,
+            default_currency=default_currency,
+            grace_period_days=grace_period_days,
+            trial_days=trial_days,
         )
         self.subscriptions = SubscriptionService(
-            uow, default_currency=default_currency, grace_period_days=grace_period_days
+            uow,
+            default_currency=default_currency,
+            grace_period_days=grace_period_days,
+            trial_days=trial_days,
         )
         self.entitlements = EntitlementService(
-            uow, default_currency=default_currency, grace_period_days=grace_period_days
+            uow,
+            default_currency=default_currency,
+            grace_period_days=grace_period_days,
+            trial_days=trial_days,
         )
         self.invoices = InvoiceService(
-            uow, default_currency=default_currency, grace_period_days=grace_period_days
+            uow,
+            default_currency=default_currency,
+            grace_period_days=grace_period_days,
+            trial_days=trial_days,
         )
         self.credits = CreditService(
-            uow, default_currency=default_currency, grace_period_days=grace_period_days
+            uow,
+            default_currency=default_currency,
+            grace_period_days=grace_period_days,
+            trial_days=trial_days,
         )
         self.reports = ReportService(
-            uow, default_currency=default_currency, grace_period_days=grace_period_days
+            uow,
+            default_currency=default_currency,
+            grace_period_days=grace_period_days,
+            trial_days=trial_days,
         )
         self.partners = PartnerService(
-            uow, default_currency=default_currency, grace_period_days=grace_period_days
+            uow,
+            default_currency=default_currency,
+            grace_period_days=grace_period_days,
+            trial_days=trial_days,
         )
         self.licenses = LicenseService(
-            uow, default_currency=default_currency, grace_period_days=grace_period_days
+            uow,
+            default_currency=default_currency,
+            grace_period_days=grace_period_days,
+            trial_days=trial_days,
         )
         self.partner_accounts = PartnerAccountService(
-            uow, default_currency=default_currency, grace_period_days=grace_period_days
+            uow,
+            default_currency=default_currency,
+            grace_period_days=grace_period_days,
+            trial_days=trial_days,
         )

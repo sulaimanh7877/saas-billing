@@ -11,7 +11,10 @@ from dataclasses import fields
 from datetime import UTC, datetime
 from typing import Any, TypeVar
 
+from sqlalchemy import inspect as sa_inspect
+
 from billing_engine.adapters.db.base import Base
+from billing_engine.domain.value_objects import utcnow
 
 EntityT = TypeVar("EntityT")
 ModelT = TypeVar("ModelT", bound=Base)
@@ -33,9 +36,20 @@ def to_entity(model: Base, entity_type: type[EntityT]) -> EntityT:
 
 
 def apply_entity(model: Any, entity: Any) -> None:
-    """Copy entity fields onto a model instance in place."""
+    """Copy entity fields onto a model instance in place.
+
+    Unset ``created_at``/``updated_at`` are filled on both the model and the
+    entity so callers receive timestamps on freshly created or updated domain
+    objects, not only on rows read back from the database.
+    """
+    is_update = sa_inspect(model).persistent
+    now = utcnow()
     for field in fields(entity):
-        value = getattr(entity, field.name)
-        if value is None and field.name in _MANAGED_TIMESTAMPS:
-            continue
-        setattr(model, field.name, value)
+        name = field.name
+        value = getattr(entity, name)
+        if name in _MANAGED_TIMESTAMPS and value is None:
+            if name == "created_at" and is_update:
+                continue
+            value = now
+            setattr(entity, name, value)
+        setattr(model, name, value)

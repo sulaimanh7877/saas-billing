@@ -63,20 +63,24 @@ def seed(
     """Seed demo data (a feature, plan, customer, and subscription)."""
     engine = _build_engine(dsn, prefix)
     engine.migrate()
-    with engine.transaction() as services:
-        services.catalog.create_feature("reports", name="Reports")
-        plan = services.catalog.create_plan("pro", "Pro")
-        version = services.catalog.create_plan_version(
-            plan.id,
-            prices=[{"amount_minor": 2900, "currency": "USD", "interval": "month"}],
-            trial_days=14,
-            entitlements=[{"feature_key": "reports", "limit_value": 1}],
-        )
-        customer = services.customers.create("demo-user", email="demo@example.com")
-        subscription = services.subscriptions.create(customer.id, version.id)
-        typer.echo(f"plan_version={version.id}")
-        typer.echo(f"customer={customer.id}")
-        typer.echo(f"subscription={subscription.id} status={subscription.status}")
+    try:
+        with engine.transaction() as services:
+            services.catalog.create_feature("reports", name="Reports")
+            plan = services.catalog.create_plan("pro", "Pro")
+            version = services.catalog.create_plan_version(
+                plan.id,
+                prices=[{"amount_minor": 2900, "currency": "USD", "interval": "month"}],
+                trial_days=14,
+                entitlements=[{"feature_key": "reports", "limit_value": 1}],
+            )
+            customer = services.customers.create("demo-user", email="demo@example.com")
+            subscription = services.subscriptions.create(customer.id, version.id)
+    except BillingError as exc:
+        typer.secho(str(exc), fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(f"plan_version={version.id}")
+    typer.echo(f"customer={customer.id}")
+    typer.echo(f"subscription={subscription.id} status={subscription.status}")
 
 
 @app.command()

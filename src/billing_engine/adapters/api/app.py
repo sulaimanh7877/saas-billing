@@ -59,6 +59,7 @@ def get_services(request: Request) -> Iterator[Services]:
         uow,
         default_currency=engine.config.default_currency,
         grace_period_days=engine.config.grace_period_days,
+        trial_days=engine.config.trial_days,
     )
     try:
         yield services
@@ -186,6 +187,7 @@ def _build_router() -> Any:
             prices=[item.model_dump() for item in body.prices],
             trial_days=body.trial_days,
             entitlements=[item.model_dump() for item in body.entitlements],
+            is_published=body.is_published,
             actor=actor,
         )
         return snapshot(version)
@@ -247,6 +249,7 @@ def _build_router() -> Any:
                 currency=body.currency,
                 trial_days=body.trial_days,
                 quantity=body.quantity,
+                collection_method=body.collection_method,
                 start_at=body.start_at,
                 actor=actor,
             )
@@ -613,14 +616,12 @@ def _build_router() -> Any:
     def get_partner(partner_id: str, services: Services = Depends(get_services)) -> Any:
         return snapshot(services.partners.get(partner_id))
 
-    @api.post("/partners/{partner_id}/commission-rules", tags=["partners"])
+    @api.post("/commission-rules", tags=["partners"])
     def create_commission_rule(
-        partner_id: str,
         body: schemas.CommissionRuleCreate,
         services: Services = Depends(get_services),
         actor: Actor = Depends(get_actor),
     ) -> Any:
-        services.partners.get(partner_id)
         return snapshot(
             services.partners.create_commission_rule(
                 basis=body.basis,
@@ -630,6 +631,10 @@ def _build_router() -> Any:
                 actor=actor,
             )
         )
+
+    @api.get("/commission-rules", tags=["partners"])
+    def list_commission_rules(services: Services = Depends(get_services)) -> list[dict[str, Any]]:
+        return [snapshot(item) for item in services.partners.list_commission_rules()]
 
     @api.post("/partners/{partner_id}/agreements", tags=["partners"])
     def create_agreement(

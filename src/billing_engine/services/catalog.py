@@ -20,6 +20,8 @@ from billing_engine.services.context import Actor
 
 _VALID_INTERVALS = {"month", "year", "one_time"}
 _VALID_VALUE_TYPES = {member.value for member in EntitlementValueType}
+_VALID_SCOPES = {member.value for member in PlanScope}
+_VALID_RESET_PERIODS = {"day", "week", "month", "year"}
 
 
 def _normalize_price(entry: dict[str, Any]) -> dict[str, Any]:
@@ -66,6 +68,8 @@ class CatalogService(Service):
             raise ValidationError("plan key is required")
         if self.uow.catalog.get_plan_by_key(cleaned) is not None:
             raise ValidationError(f"plan key {cleaned!r} already exists")
+        if product_id is not None:
+            require(self.uow.catalog.get_product(product_id), "product", product_id)
         plan = Plan(id=new_ulid(), key=cleaned, name=name, product_id=product_id)
         self.uow.catalog.add_plan(plan)
         self.uow.flush()
@@ -82,14 +86,17 @@ class CatalogService(Service):
         entitlements: list[dict[str, Any]] | None = None,
         scope: str = PlanScope.CATALOG.value,
         customer_id: str | None = None,
+        is_published: bool = True,
         actor: Actor | None = None,
     ) -> PlanVersion:
         """Create an immutable plan version with prices and entitlements."""
-        plan = require(self.uow.catalog.get_plan(plan_id), "plan", plan_id)
+        plan = require(self.uow.catalog.get_plan_for_update(plan_id), "plan", plan_id)
         if not prices:
             raise ValidationError("a plan version requires at least one price")
         if trial_days < 0:
             raise ValidationError("trial_days must be non-negative")
+        if scope not in _VALID_SCOPES:
+            raise ValidationError(f"invalid scope {scope!r}; expected {_VALID_SCOPES}")
         if scope == PlanScope.CUSTOMER_CUSTOM.value and not customer_id:
             raise ValidationError("customer-scoped plan versions require a customer_id")
 
@@ -102,6 +109,7 @@ class CatalogService(Service):
             scope=scope,
             customer_id=customer_id,
             trial_days=trial_days,
+            is_published=is_published,
         )
         self.uow.catalog.add_plan_version(version)
 
@@ -168,6 +176,8 @@ class CatalogService(Service):
             raise ValidationError("feature key is required")
         if value_type not in _VALID_VALUE_TYPES:
             raise ValidationError(f"invalid value_type {value_type!r}")
+        if reset_period is not None and reset_period not in _VALID_RESET_PERIODS:
+            raise ValidationError(f"invalid reset_period {reset_period!r}")
         if self.uow.catalog.get_feature_by_key(cleaned) is not None:
             raise ValidationError(f"feature key {cleaned!r} already exists")
         feature = Feature(

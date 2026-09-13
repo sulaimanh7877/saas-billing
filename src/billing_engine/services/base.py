@@ -20,10 +20,12 @@ class Service:
         *,
         default_currency: str = "USD",
         grace_period_days: int = 0,
+        trial_days: int = 0,
     ) -> None:
         self.uow = uow
         self.default_currency = default_currency
         self.grace_period_days = grace_period_days
+        self.trial_days = trial_days
         self.audit = AuditService(uow)
 
 
