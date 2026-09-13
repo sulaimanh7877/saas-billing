@@ -126,3 +126,27 @@ class SqlReportRepository:
             }
             for key, count in plan_rows
         ]
+
+    def channel_revenue(self, currency: str) -> list[dict[str, Any]]:
+        rows = self.session.execute(
+            select(
+                m.Partner.id,
+                m.Partner.name,
+                func.count(m.License.id),
+                func.coalesce(func.sum(m.Price.amount_minor), 0),
+            )
+            .select_from(m.License)
+            .join(m.Partner, m.Partner.id == m.License.partner_id)
+            .join(m.Price, m.Price.plan_version_id == m.License.plan_version_id)
+            .where(m.Price.currency == currency)
+            .group_by(m.Partner.id, m.Partner.name)
+        ).all()
+        return [
+            {
+                "partner_id": str(partner_id),
+                "partner_name": name,
+                "licenses": int(licenses),
+                "value_minor": int(value),
+            }
+            for partner_id, name, licenses, value in rows
+        ]

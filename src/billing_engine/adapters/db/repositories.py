@@ -19,6 +19,9 @@ from billing_engine.domain.repositories import (
     EntitlementRepository,
     EventRepository,
     InvoiceRepository,
+    LicenseRepository,
+    PartnerAccountRepository,
+    PartnerRepository,
     ReportRepository,
     SubscriptionRepository,
 )
@@ -391,6 +394,248 @@ class SqlEventRepository(_Repository):
             model.available_at = retry_at
 
 
+class SqlPartnerRepository(_Repository):
+    def add_partner(self, partner: e.Partner) -> None:
+        model = m.Partner()
+        apply_entity(model, partner)
+        self.session.add(model)
+
+    def get_partner(self, partner_id: str) -> e.Partner | None:
+        model = self.session.get(m.Partner, partner_id)
+        return to_entity(model, e.Partner) if model else None
+
+    def get_partner_by_external_id(self, external_id: str) -> e.Partner | None:
+        model = self.session.scalar(select(m.Partner).where(m.Partner.external_id == external_id))
+        return to_entity(model, e.Partner) if model else None
+
+    def update_partner(self, partner: e.Partner) -> None:
+        model = self.session.get(m.Partner, partner.id)
+        if model is not None:
+            apply_entity(model, partner)
+
+    def list_partners(self, limit: int = 100, offset: int = 0) -> list[e.Partner]:
+        models = self.session.scalars(
+            select(m.Partner).order_by(m.Partner.created_at).limit(limit).offset(offset)
+        )
+        return [to_entity(model, e.Partner) for model in models]
+
+    def add_agreement(self, agreement: e.PartnerAgreement) -> None:
+        model = m.PartnerAgreement()
+        apply_entity(model, agreement)
+        self.session.add(model)
+
+    def get_agreement(self, agreement_id: str) -> e.PartnerAgreement | None:
+        model = self.session.get(m.PartnerAgreement, agreement_id)
+        return to_entity(model, e.PartnerAgreement) if model else None
+
+    def list_agreements(self, partner_id: str) -> list[e.PartnerAgreement]:
+        models = self.session.scalars(
+            select(m.PartnerAgreement).where(m.PartnerAgreement.partner_id == partner_id)
+        )
+        return [to_entity(model, e.PartnerAgreement) for model in models]
+
+    def add_commission_rule(self, rule: e.CommissionRule) -> None:
+        model = m.CommissionRule()
+        apply_entity(model, rule)
+        self.session.add(model)
+
+    def get_commission_rule(self, rule_id: str) -> e.CommissionRule | None:
+        model = self.session.get(m.CommissionRule, rule_id)
+        return to_entity(model, e.CommissionRule) if model else None
+
+
+class SqlLicenseRepository(_Repository):
+    def add_allocation(self, allocation: e.LicenseAllocation) -> None:
+        model = m.LicenseAllocation()
+        apply_entity(model, allocation)
+        self.session.add(model)
+
+    def get_allocation(self, allocation_id: str) -> e.LicenseAllocation | None:
+        model = self.session.get(m.LicenseAllocation, allocation_id)
+        return to_entity(model, e.LicenseAllocation) if model else None
+
+    def update_allocation(self, allocation: e.LicenseAllocation) -> None:
+        model = self.session.get(m.LicenseAllocation, allocation.id)
+        if model is not None:
+            apply_entity(model, allocation)
+
+    def list_allocations(self, partner_id: str) -> list[e.LicenseAllocation]:
+        models = self.session.scalars(
+            select(m.LicenseAllocation)
+            .where(m.LicenseAllocation.partner_id == partner_id)
+            .order_by(m.LicenseAllocation.created_at)
+        )
+        return [to_entity(model, e.LicenseAllocation) for model in models]
+
+    def add_license(self, license_: e.License) -> None:
+        model = m.License()
+        apply_entity(model, license_)
+        self.session.add(model)
+
+    def get_license(self, license_id: str) -> e.License | None:
+        model = self.session.get(m.License, license_id)
+        return to_entity(model, e.License) if model else None
+
+    def update_license(self, license_: e.License) -> None:
+        model = self.session.get(m.License, license_.id)
+        if model is not None:
+            apply_entity(model, license_)
+
+    def list_licenses(self, partner_id: str) -> list[e.License]:
+        models = self.session.scalars(
+            select(m.License)
+            .where(m.License.partner_id == partner_id)
+            .order_by(m.License.created_at)
+        )
+        return [to_entity(model, e.License) for model in models]
+
+    def list_licenses_for_allocation(self, allocation_id: str) -> list[e.License]:
+        models = self.session.scalars(
+            select(m.License).where(m.License.allocation_id == allocation_id)
+        )
+        return [to_entity(model, e.License) for model in models]
+
+
+class SqlPartnerAccountRepository(_Repository):
+    def get_account(
+        self, partner_id: str, currency: str, account_type: str
+    ) -> e.PartnerAccount | None:
+        model = self.session.scalar(
+            select(m.PartnerAccount).where(
+                m.PartnerAccount.partner_id == partner_id,
+                m.PartnerAccount.currency == currency,
+                m.PartnerAccount.account_type == account_type,
+            )
+        )
+        return to_entity(model, e.PartnerAccount) if model else None
+
+    def list_accounts(self, partner_id: str) -> list[e.PartnerAccount]:
+        models = self.session.scalars(
+            select(m.PartnerAccount).where(m.PartnerAccount.partner_id == partner_id)
+        )
+        return [to_entity(model, e.PartnerAccount) for model in models]
+
+    def add_account(self, account: e.PartnerAccount) -> None:
+        model = m.PartnerAccount()
+        apply_entity(model, account)
+        self.session.add(model)
+
+    def update_account(self, account: e.PartnerAccount) -> None:
+        model = self.session.get(m.PartnerAccount, account.id)
+        if model is not None:
+            apply_entity(model, account)
+
+    def add_entry(self, entry: e.PartnerLedgerEntry) -> None:
+        model = m.PartnerLedgerEntry()
+        apply_entity(model, entry)
+        self.session.add(model)
+
+    def list_entries(
+        self,
+        partner_id: str,
+        currency: str | None = None,
+        since: datetime | None = None,
+        until: datetime | None = None,
+    ) -> list[e.PartnerLedgerEntry]:
+        statement = select(m.PartnerLedgerEntry).where(
+            m.PartnerLedgerEntry.partner_id == partner_id
+        )
+        if currency is not None:
+            statement = statement.where(m.PartnerLedgerEntry.currency == currency)
+        if since is not None:
+            statement = statement.where(m.PartnerLedgerEntry.created_at >= since)
+        if until is not None:
+            statement = statement.where(m.PartnerLedgerEntry.created_at <= until)
+        models = self.session.scalars(statement.order_by(m.PartnerLedgerEntry.created_at))
+        return [to_entity(model, e.PartnerLedgerEntry) for model in models]
+
+    def add_invoice(self, invoice: e.PartnerInvoice) -> None:
+        model = m.PartnerInvoice()
+        apply_entity(model, invoice)
+        self.session.add(model)
+
+    def get_invoice(self, invoice_id: str) -> e.PartnerInvoice | None:
+        model = self.session.get(m.PartnerInvoice, invoice_id)
+        return to_entity(model, e.PartnerInvoice) if model else None
+
+    def update_invoice(self, invoice: e.PartnerInvoice) -> None:
+        model = self.session.get(m.PartnerInvoice, invoice.id)
+        if model is not None:
+            apply_entity(model, invoice)
+
+    def list_invoices(self, partner_id: str) -> list[e.PartnerInvoice]:
+        models = self.session.scalars(
+            select(m.PartnerInvoice)
+            .where(m.PartnerInvoice.partner_id == partner_id)
+            .order_by(m.PartnerInvoice.created_at)
+        )
+        return [to_entity(model, e.PartnerInvoice) for model in models]
+
+    def add_invoice_line(self, line: e.PartnerInvoiceLine) -> None:
+        model = m.PartnerInvoiceLine()
+        apply_entity(model, line)
+        self.session.add(model)
+
+    def list_invoice_lines(self, invoice_id: str) -> list[e.PartnerInvoiceLine]:
+        models = self.session.scalars(
+            select(m.PartnerInvoiceLine).where(
+                m.PartnerInvoiceLine.partner_invoice_id == invoice_id
+            )
+        )
+        return [to_entity(model, e.PartnerInvoiceLine) for model in models]
+
+    def add_payment(self, payment: e.PartnerPayment) -> None:
+        model = m.PartnerPayment()
+        apply_entity(model, payment)
+        self.session.add(model)
+
+    def list_payments(self, partner_id: str) -> list[e.PartnerPayment]:
+        models = self.session.scalars(
+            select(m.PartnerPayment)
+            .where(m.PartnerPayment.partner_id == partner_id)
+            .order_by(m.PartnerPayment.created_at)
+        )
+        return [to_entity(model, e.PartnerPayment) for model in models]
+
+    def add_payout(self, payout: e.PartnerPayout) -> None:
+        model = m.PartnerPayout()
+        apply_entity(model, payout)
+        self.session.add(model)
+
+    def get_payout(self, payout_id: str) -> e.PartnerPayout | None:
+        model = self.session.get(m.PartnerPayout, payout_id)
+        return to_entity(model, e.PartnerPayout) if model else None
+
+    def update_payout(self, payout: e.PartnerPayout) -> None:
+        model = self.session.get(m.PartnerPayout, payout.id)
+        if model is not None:
+            apply_entity(model, payout)
+
+    def add_payout_line(self, line: e.PartnerPayoutLine) -> None:
+        model = m.PartnerPayoutLine()
+        apply_entity(model, line)
+        self.session.add(model)
+
+    def list_payout_lines(self, payout_id: str) -> list[e.PartnerPayoutLine]:
+        models = self.session.scalars(
+            select(m.PartnerPayoutLine).where(m.PartnerPayoutLine.payout_id == payout_id)
+        )
+        return [to_entity(model, e.PartnerPayoutLine) for model in models]
+
+    def add_statement(self, statement: e.PartnerStatement) -> None:
+        model = m.PartnerStatement()
+        apply_entity(model, statement)
+        self.session.add(model)
+
+    def list_statements(self, partner_id: str) -> list[e.PartnerStatement]:
+        models = self.session.scalars(
+            select(m.PartnerStatement)
+            .where(m.PartnerStatement.partner_id == partner_id)
+            .order_by(m.PartnerStatement.period_start)
+        )
+        return [to_entity(model, e.PartnerStatement) for model in models]
+
+
 class SqlUnitOfWork:
     """A session-backed unit of work exposing all repositories."""
 
@@ -405,6 +650,9 @@ class SqlUnitOfWork:
         self.audit: AuditRepository = SqlAuditRepository(session)
         self.events: EventRepository = SqlEventRepository(session)
         self.reports: ReportRepository = SqlReportRepository(session)
+        self.partners: PartnerRepository = SqlPartnerRepository(session)
+        self.licenses: LicenseRepository = SqlLicenseRepository(session)
+        self.partner_accounts: PartnerAccountRepository = SqlPartnerAccountRepository(session)
 
     def commit(self) -> None:
         self.session.commit()

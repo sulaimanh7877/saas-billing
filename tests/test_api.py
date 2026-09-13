@@ -88,3 +88,44 @@ def test_not_found_maps_to_404(tmp_path) -> None:
     client = make_client(tmp_path)
     response = client.get("/customers/01HZZZZZZZZZZZZZZZZZZZZZZZ", headers=HEADERS)
     assert response.status_code == 404
+
+
+def test_partner_flow(tmp_path) -> None:
+    client = make_client(tmp_path)
+    partner = client.post(
+        "/partners", json={"name": "Reseller", "type": "reseller"}, headers=HEADERS
+    ).json()
+    plan = client.post("/plans", json={"key": "rp"}, headers=HEADERS).json()
+    version = client.post(
+        f"/plans/{plan['id']}/versions",
+        json={"prices": [{"amount_minor": 1000, "currency": "USD", "interval": "month"}]},
+        headers=HEADERS,
+    ).json()
+    agreement = client.post(
+        f"/partners/{partner['id']}/agreements",
+        json={"money_model": "consignment"},
+        headers=HEADERS,
+    ).json()
+    allocation = client.post(
+        f"/partners/{partner['id']}/allocations",
+        json={
+            "plan_version_id": version["id"],
+            "quantity": 2,
+            "agreement_id": agreement["id"],
+        },
+        headers=HEADERS,
+    ).json()
+    license_ = client.post(
+        f"/allocations/{allocation['id']}/licenses",
+        json={"external_id": "end-1"},
+        headers=HEADERS,
+    ).json()
+    assert license_["status"] == "active"
+
+    accounts = client.get(f"/partners/{partner['id']}/accounts", headers=HEADERS).json()
+    assert any(
+        account["account_type"] == "receivable" and account["balance_minor"] == 1000
+        for account in accounts
+    )
+    channel = client.get("/reports/channel", headers=HEADERS).json()
+    assert channel and channel[0]["partner_id"] == partner["id"]

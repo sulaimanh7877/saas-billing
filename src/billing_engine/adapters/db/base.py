@@ -51,7 +51,9 @@ def _token_logical_table_name(constraint: Any, table: Any) -> str:
 
 
 def _token_logical_referred_table_name(constraint: Any, table: Any) -> str:
-    name = str(constraint.referred_table.name)
+    target = str(constraint.elements[0].target_fullname)
+    parts = target.split(".")
+    name = parts[-2] if len(parts) >= 2 else target
     prefix = _configured_prefix()
     if prefix and name.startswith(prefix):
         return name[len(prefix) :]

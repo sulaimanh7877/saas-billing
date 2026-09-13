@@ -149,3 +149,78 @@ class PaymentCreate(BaseModel):
 class CreditCreate(BaseModel):
     amount_minor: int
     reason: str | None = None
+
+
+class PartnerCreate(BaseModel):
+    name: str
+    type: str = "agent"
+    external_id: str | None = None
+    email: str | None = None
+    phone: str | None = None
+    currency: str | None = None
+    parent_partner_id: str | None = None
+    attributes: dict[str, Any] = Field(default_factory=dict)
+
+
+class CommissionRuleCreate(BaseModel):
+    basis: str = "flat"
+    rate_bps: int = 0
+    tiers: list[dict[str, Any]] | None = None
+    levels: list[dict[str, Any]] | None = None
+
+
+class AgreementCreate(BaseModel):
+    money_model: str = "consignment"
+    currency: str | None = None
+    discount_bps: int = 0
+    plan_id: str | None = None
+    commission_rule_id: str | None = None
+    effective_from: datetime | None = None
+    effective_to: datetime | None = None
+
+
+class AllocationCreate(BaseModel):
+    plan_version_id: str
+    quantity: int
+    agreement_id: str | None = None
+    parent_allocation_id: str | None = None
+
+
+class LicenseIssue(BaseModel):
+    customer_id: str | None = None
+    external_id: str | None = None
+    email: str | None = None
+    name: str | None = None
+
+
+class PrefundRequest(BaseModel):
+    amount_minor: int
+    currency: str | None = None
+    reason: str | None = None
+
+
+class PartnerPaymentRequest(BaseModel):
+    amount_minor: int
+    currency: str | None = None
+    method: str = "other"
+    reference: str | None = None
+
+
+class PartnerInvoiceCreate(BaseModel):
+    lines: list[InvoiceLineIn] = Field(default_factory=list)
+    currency: str | None = None
+    due_date: datetime | None = None
+    notes: str | None = None
+    finalize: bool = False
+
+
+class PayoutCreate(BaseModel):
+    lines: list[dict[str, Any]] = Field(default_factory=list)
+    currency: str | None = None
+    reference: str | None = None
+
+
+class StatementCreate(BaseModel):
+    period_start: datetime
+    period_end: datetime
+    currency: str | None = None
