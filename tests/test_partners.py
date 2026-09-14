@@ -98,8 +98,10 @@ def test_partner_invoice_and_payment(services) -> None:
         finalize=True,
     )
     assert invoice.total_minor == 2000
+    # finalizing a partner invoice posts a backing charge to the receivable
+    assert services.partner_accounts.balances(partner.id)["receivable"] == 2000
     services.partner_accounts.record_invoice_payment(invoice.id, 2000)
-    assert services.partner_accounts.balances(partner.id)["receivable"] == -2000
+    assert services.partner_accounts.balances(partner.id)["receivable"] == 0
 
 
 def test_payout_marks_paid(services) -> None:

@@ -7,6 +7,37 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Fixed
+- **Timestamps**: `updated_at` now advances on every persisted mutation (it was
+  frozen because stale entity values suppressed `onupdate`), and updates return
+  the persisted `created_at` instead of `None` (#22).
+- **Trial cancellation**: `cancel(at_period_end=True)` on a trialing
+  subscription now cancels at `trial_end` rather than a full interval later
+  (#22).
+- **Custom plans**: `customer_custom` plan versions are enforced as
+  customer-scoped on both `create` and `change_plan`, require an existing
+  customer, and no longer appear in the catalog listing (`list_plans` /
+  `GET /plans`) (#22).
+- **Catalog**: `change_plan` rejects unpublished plan versions, and
+  `create_plan_version` rejects duplicate `(currency, interval)` prices (#22).
+- **Currency**: customer/partner/agreement/credit/invoice currencies are
+  validated as three-letter ISO 4217 codes instead of being silently uppercased
+  (#22).
+- **Mountable router**: mounting `billing_engine.adapters.api.app.router`
+  directly now opens its own session/transaction per request instead of
+  returning 500, matching the documented deployment guide (#22).
+- **Plan version immutability**: `set_entitlements` now refuses to mutate a
+  published plan version (create a new version instead) (#22).
+- **Lifecycle audit**: entering the `past_due` grace window now writes a
+  `subscription_adjustments` row, and `pause(until=...)` is honored by
+  `process_due`, which auto-resumes the subscription when the window ends (#22).
+- **Partner accounts**: `(partner_id, currency, account_type)` is unique and
+  posting takes a row lock, so concurrent ledger posts cannot create duplicate
+  accounts or lose balance updates (#22).
+- **Partner invoicing**: finalizing a partner invoice posts a backing `charge`
+  to the receivable, so payments net the balance to zero instead of driving it
+  negative (#22).
+- **Channel reporting**: `channel_revenue` counts each license once (joining the
+  actual subscription price) and applies the agreement `discount_bps` (#22).
 - **License issuance currency mismatch**: issuing now passes the
   agreement-currency price into the subscription, so the subscription and any
   invoice derived from it use the same currency/amount that was charged (#20).

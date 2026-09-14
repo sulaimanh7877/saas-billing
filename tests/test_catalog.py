@@ -47,6 +47,7 @@ def test_find_price_by_currency(services) -> None:
 
 def test_custom_plan_is_scoped_to_customer(services) -> None:
     customer = make_customer(services, "user-1")
+    make_plan(services, "base")
     version = services.catalog.create_custom_plan(
         customer.id,
         name="Enterprise deal",
@@ -55,7 +56,9 @@ def test_custom_plan_is_scoped_to_customer(services) -> None:
     )
     assert version.scope == "customer_custom"
     assert version.customer_id == customer.id
-    assert services.catalog.list_plans() != []
+    plan_keys = {plan.key for plan in services.catalog.list_plans()}
+    assert "base" in plan_keys
+    assert not any(key.startswith("custom-") for key in plan_keys)
     assert services.catalog.list_prices(version.id)[0].interval == "year"
 
 

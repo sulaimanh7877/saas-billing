@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import hmac
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from typing import Any
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, status
@@ -50,10 +50,36 @@ def get_actor(request: Request) -> Actor:
     )
 
 
-def get_services(request: Request) -> Services:
-    """Return the request-scoped services bundle built by the transaction middleware."""
-    services: Services = request.state.services
-    return services
+def get_services(request: Request) -> Iterator[Services]:
+    """Return the request-scoped services bundle.
+
+    Under :func:`create_app` the bundle (and its transaction) is owned by the
+    middleware and simply reused here. When the bare ``router`` is mounted
+    directly, this dependency opens its own session and commits or rolls back,
+    so the documented mount-your-own-app path works without extra wiring.
+    """
+    existing = getattr(request.state, "services", None)
+    if existing is not None:
+        yield existing
+        return
+
+    engine = request.app.state.engine
+    session = engine.session_factory()
+    uow = SqlUnitOfWork(session)
+    bundle = Services(
+        uow,
+        default_currency=engine.config.default_currency,
+        grace_period_days=engine.config.grace_period_days,
+        trial_days=engine.config.trial_days,
+    )
+    try:
+        yield bundle
+        uow.commit()
+    except Exception:
+        uow.rollback()
+        raise
+    finally:
+        session.close()
 
 
 def require_api_key(

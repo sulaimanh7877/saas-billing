@@ -13,8 +13,8 @@ from billing_engine.domain.entities import (
     Product,
 )
 from billing_engine.domain.enums import EntitlementValueType, PlanScope
-from billing_engine.domain.errors import NotFoundError, ValidationError
-from billing_engine.domain.value_objects import new_ulid
+from billing_engine.domain.errors import ConflictError, NotFoundError, ValidationError
+from billing_engine.domain.value_objects import new_ulid, normalize_currency
 from billing_engine.services.base import Service, require
 from billing_engine.services.context import Actor
 
@@ -27,14 +27,12 @@ _VALID_RESET_PERIODS = {"day", "week", "month", "year"}
 def _normalize_price(entry: dict[str, Any]) -> dict[str, Any]:
     try:
         amount = int(entry["amount_minor"])
-        currency = str(entry.get("currency", "USD")).upper()
+        currency = normalize_currency(str(entry.get("currency", "USD")))
         interval = str(entry.get("interval", "month"))
     except (KeyError, TypeError, ValueError) as exc:
         raise ValidationError(f"invalid price entry: {entry!r}") from exc
     if amount < 0:
         raise ValidationError("price amount_minor must be non-negative")
-    if len(currency) != 3 or not currency.isalpha():
-        raise ValidationError(f"invalid currency in price entry: {currency!r}")
     if interval not in _VALID_INTERVALS:
         raise ValidationError(f"invalid interval {interval!r}; expected {_VALID_INTERVALS}")
     return {"amount_minor": amount, "currency": currency, "interval": interval}
@@ -97,8 +95,10 @@ class CatalogService(Service):
             raise ValidationError("trial_days must be non-negative")
         if scope not in _VALID_SCOPES:
             raise ValidationError(f"invalid scope {scope!r}; expected {_VALID_SCOPES}")
-        if scope == PlanScope.CUSTOMER_CUSTOM.value and not customer_id:
-            raise ValidationError("customer-scoped plan versions require a customer_id")
+        if scope == PlanScope.CUSTOMER_CUSTOM.value:
+            if not customer_id:
+                raise ValidationError("customer-scoped plan versions require a customer_id")
+            require(self.uow.customers.get(customer_id), "customer", customer_id)
 
         existing = self.uow.catalog.list_plan_versions(plan.id)
         version = PlanVersion(
@@ -113,8 +113,15 @@ class CatalogService(Service):
         )
         self.uow.catalog.add_plan_version(version)
 
+        seen_prices: set[tuple[str, str]] = set()
         for entry in prices:
             normalized = _normalize_price(entry)
+            price_key = (normalized["currency"], normalized["interval"])
+            if price_key in seen_prices:
+                raise ValidationError(
+                    f"duplicate {price_key[0]} {price_key[1]} price for a plan version"
+                )
+            seen_prices.add(price_key)
             self.uow.catalog.add_price(
                 Price(
                     id=new_ulid(),
@@ -125,7 +132,7 @@ class CatalogService(Service):
                 )
             )
 
-        self.set_entitlements(version.id, entitlements or [], actor=actor)
+        self._replace_entitlements(version.id, entitlements or [], actor=actor)
         self.uow.flush()
         self.audit.record("plan_version.create", "plan_version", version.id, actor, after=version)
         return version
@@ -200,7 +207,30 @@ class CatalogService(Service):
         *,
         actor: Actor | None = None,
     ) -> list[PlanEntitlement]:
-        """Replace the entitlements attached to a plan version."""
+        """Replace entitlements on an unpublished plan version.
+
+        Published plan versions are immutable: publish a new version instead.
+        """
+        version = require(
+            self.uow.catalog.get_plan_version(plan_version_id),
+            "plan_version",
+            plan_version_id,
+        )
+        if version.is_published:
+            raise ConflictError(
+                f"plan_version {plan_version_id!r} is published and immutable; "
+                "create a new version instead"
+            )
+        return self._replace_entitlements(plan_version_id, entitlements, actor=actor)
+
+    def _replace_entitlements(
+        self,
+        plan_version_id: str,
+        entitlements: list[dict[str, Any]],
+        *,
+        actor: Actor | None = None,
+    ) -> list[PlanEntitlement]:
+        """Attach entitlements to a plan version (internal creation-time helper)."""
         require(
             self.uow.catalog.get_plan_version(plan_version_id),
             "plan_version",

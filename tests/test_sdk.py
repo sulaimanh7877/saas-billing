@@ -1,6 +1,7 @@
 import pytest
 
 from billing_engine import BillingEngine, EngineConfig
+from billing_engine.adapters.db.migrations import MIGRATIONS
 from billing_engine.domain.errors import ConflictError
 from conftest import TEST_PREFIX
 
@@ -10,7 +11,7 @@ def test_engine_migrate_and_transaction(tmp_path) -> None:
     engine = BillingEngine(EngineConfig(dsn=dsn, table_prefix=TEST_PREFIX))
 
     applied = engine.migrate()
-    assert applied == ["0001"]
+    assert applied == [migration.version for migration in MIGRATIONS]
 
     with engine.transaction() as services:
         feature = services.catalog.create_feature("reports")

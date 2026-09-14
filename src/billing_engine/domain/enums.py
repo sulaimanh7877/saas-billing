@@ -45,6 +45,7 @@ class AdjustmentType(StrEnum):
     SHORTEN = "shorten"
     TRIAL_EXTEND = "trial_extend"
     PAUSE = "pause"
+    PAST_DUE = "past_due"
     RESUME = "resume"
     CANCEL = "cancel"
     RENEW = "renew"

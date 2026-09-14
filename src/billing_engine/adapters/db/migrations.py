@@ -10,13 +10,14 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from sqlalchemy import Table, insert, select
+from sqlalchemy import Table, insert, inspect, select, text
 from sqlalchemy.engine import Connection, Engine
 from sqlalchemy.orm import Session
 
 from billing_engine.adapters.db import models as m
-from billing_engine.adapters.db.base import Base
+from billing_engine.adapters.db.base import Base, current_prefix
 from billing_engine.domain.value_objects import new_ulid, utcnow
+from billing_engine.naming import PrefixNamer
 
 
 @dataclass(frozen=True, slots=True)
@@ -30,8 +31,34 @@ def _initial_core_schema(connection: Connection) -> None:
     Base.metadata.create_all(connection, checkfirst=True)
 
 
+def _partner_account_uniqueness(connection: Connection) -> None:
+    """Add the partner-account uniqueness guard for pre-existing databases.
+
+    Fresh databases already get the constraint from the model's
+    ``UniqueConstraint``; this migration is a no-op for them and creates a
+    unique index for databases created before it existed.
+    """
+    inspector = inspect(connection)
+    namer = PrefixNamer(current_prefix())
+    table_name = namer.table("partner_accounts")
+    target = {"partner_id", "currency", "account_type"}
+    for constraint in inspector.get_unique_constraints(table_name):
+        if set(constraint["column_names"]) == target:
+            return
+    for index in inspector.get_indexes(table_name):
+        if index.get("unique") and set(index["column_names"]) == target:
+            return
+    index_name = namer.unique("partner_accounts", "partner_id", "currency", "account_type")
+    connection.execute(
+        text(
+            f"CREATE UNIQUE INDEX {index_name} ON {table_name} (partner_id, currency, account_type)"
+        )
+    )
+
+
 MIGRATIONS: tuple[Migration, ...] = (
     Migration("0001", "initial core schema", _initial_core_schema),
+    Migration("0002", "partner account uniqueness", _partner_account_uniqueness),
 )
 
 

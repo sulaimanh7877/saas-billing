@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 
 from billing_engine.domain.entities import (
+    PlanVersion,
     Price,
     Subscription,
     SubscriptionAdjustment,
@@ -13,6 +14,7 @@ from billing_engine.domain.enums import (
     AdjustmentType,
     BillingInterval,
     CollectionMethod,
+    PlanScope,
     SubscriptionStatus,
 )
 from billing_engine.domain.errors import ConflictError, NotFoundError, ValidationError
@@ -53,6 +55,13 @@ class SubscriptionService(Service):
             raise NotFoundError(f"no {wanted} price for plan version {plan_version_id!r}")
         return prices[0]
 
+    def _ensure_version_usable(self, version: PlanVersion, customer_id: str) -> None:
+        """Reject customer-specific plan versions owned by another customer."""
+        if version.scope == PlanScope.CUSTOMER_CUSTOM.value and version.customer_id != customer_id:
+            raise ValidationError(
+                f"plan_version {version.id!r} is a customer-specific plan for another customer"
+            )
+
     def create(
         self,
         customer_id: str,
@@ -79,6 +88,7 @@ class SubscriptionService(Service):
             raise ValidationError(f"invalid collection_method {collection_method!r}")
         if not version.is_published:
             raise ConflictError(f"plan_version {version.id!r} is not published")
+        self._ensure_version_usable(version, customer.id)
         if trial_days is not None:
             effective_trial = trial_days
         elif version.trial_days:
@@ -202,6 +212,35 @@ class SubscriptionService(Service):
         )
         return subscription
 
+    def set_period_end(
+        self,
+        subscription_id: str,
+        end: datetime,
+        *,
+        reason: str | None = None,
+        actor: Actor | None = None,
+    ) -> Subscription:
+        """Set a custom next billing date for the current period."""
+        subscription = self.get(subscription_id)
+        previous = (
+            as_utc(subscription.current_period_end)
+            if subscription.current_period_end is not None
+            else None
+        )
+        new_end = as_utc(end)
+        subscription.current_period_end = new_end
+        self._apply(
+            subscription,
+            AdjustmentType.SET_PERIOD_END.value,
+            actor=actor,
+            reason=reason,
+            previous_period_end=previous,
+            new_period_end=new_end,
+            action="subscription.set_period_end",
+            event="subscription.period_end_set",
+        )
+        return subscription
+
     def extend_trial(
         self,
         subscription_id: str,
@@ -290,7 +329,13 @@ class SubscriptionService(Service):
         """Cancel immediately or at the end of the current period."""
         subscription = self.get(subscription_id)
         if at_period_end:
-            subscription.cancel_at = as_utc(subscription.current_period_end or utcnow())
+            if (
+                subscription.status == SubscriptionStatus.TRIALING.value
+                and subscription.trial_end is not None
+            ):
+                subscription.cancel_at = as_utc(subscription.trial_end)
+            else:
+                subscription.cancel_at = as_utc(subscription.current_period_end or utcnow())
         else:
             ensure_transition(SubscriptionStatus(subscription.status), SubscriptionStatus.CANCELED)
             subscription.status = SubscriptionStatus.CANCELED.value
@@ -350,11 +395,14 @@ class SubscriptionService(Service):
     ) -> Subscription:
         """Switch a subscription to another plan version, without proration."""
         subscription = self.get(subscription_id)
-        require(
+        version = require(
             self.uow.catalog.get_plan_version(plan_version_id),
             "plan_version",
             plan_version_id,
         )
+        if not version.is_published:
+            raise ConflictError(f"plan_version {version.id!r} is not published")
+        self._ensure_version_usable(version, subscription.customer_id)
         price = self._find_price(plan_version_id, price_id, currency)
         subscription.plan_version_id = plan_version_id
         subscription.price_id = price.id
@@ -449,6 +497,22 @@ class SubscriptionService(Service):
         subscription.status = SubscriptionStatus.PAST_DUE.value
         subscription.grace_until = moment + timedelta(days=self.grace_period_days)
         self.uow.subscriptions.update(subscription)
+        self.uow.subscriptions.add_adjustment(
+            SubscriptionAdjustment(
+                id=new_ulid(),
+                subscription_id=subscription.id,
+                adjustment_type=AdjustmentType.PAST_DUE.value,
+                previous_period_end=(
+                    as_utc(subscription.current_period_end)
+                    if subscription.current_period_end is not None
+                    else None
+                ),
+                new_period_end=subscription.grace_until,
+                reason="grace period",
+                actor_type=(actor.type if actor else "system"),
+                actor_id=actor.id if actor else None,
+            )
+        )
         self.uow.flush()
         self.audit.record(
             "subscription.past_due", "subscription", subscription.id, actor, after=subscription
@@ -461,6 +525,14 @@ class SubscriptionService(Service):
         moment = as_utc(now) if now is not None else utcnow()
         renewed: list[str] = []
         for subscription in self.uow.subscriptions.list_due(moment):
+            if (
+                subscription.status == SubscriptionStatus.PAUSED.value
+                and subscription.paused_until is not None
+                and as_utc(subscription.paused_until) <= moment
+            ):
+                subscription = self.resume(
+                    subscription.id, reason="pause window ended", actor=actor
+                )
             interval = self._interval(subscription)
             if subscription.cancel_at is not None and as_utc(subscription.cancel_at) <= moment:
                 if not self._enter_grace(subscription, moment, actor):
