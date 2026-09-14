@@ -9,7 +9,7 @@ from typing import Any
 from billing_engine.domain.entities import CommissionRule, Partner, PartnerAgreement
 from billing_engine.domain.enums import CommissionBasis, MoneyModel, PartnerType
 from billing_engine.domain.errors import ConflictError, ValidationError
-from billing_engine.domain.value_objects import new_ulid
+from billing_engine.domain.value_objects import as_utc, new_ulid, utcnow
 from billing_engine.services.base import Service, require
 from billing_engine.services.context import Actor
 
@@ -133,6 +133,14 @@ class PartnerService(Service):
             raise ValidationError(f"invalid money model {money_model!r}")
         if discount_bps < 0 or discount_bps > 10_000:
             raise ValidationError("discount_bps must be between 0 and 10000")
+        if plan_id is not None:
+            require(self.uow.catalog.get_plan(plan_id), "plan", plan_id)
+        if (
+            effective_from is not None
+            and effective_to is not None
+            and as_utc(effective_to) < as_utc(effective_from)
+        ):
+            raise ValidationError("effective_to must not precede effective_from")
         if commission_rule_id is not None:
             require(
                 self.uow.partners.get_commission_rule(commission_rule_id),
@@ -168,16 +176,23 @@ class PartnerService(Service):
     def default_agreement(
         self, partner_id: str, plan_id: str | None = None
     ) -> PartnerAgreement | None:
-        """Return the most recent active agreement, preferring a plan match."""
+        """Return the most recent active agreement, preferring a plan match.
+
+        Agreements outside their effective window are ignored so an expired or
+        not-yet-started agreement is never selected.
+        """
+        now = utcnow()
         agreements = [
             item
             for item in self.uow.partners.list_agreements(partner_id)
             if item.status == "active"
+            and (item.effective_from is None or as_utc(item.effective_from) <= now)
+            and (item.effective_to is None or as_utc(item.effective_to) >= now)
         ]
         if plan_id is not None:
-            for agreement in agreements:
-                if agreement.plan_id == plan_id:
-                    return agreement
+            matches = [item for item in agreements if item.plan_id == plan_id]
+            if matches:
+                return matches[-1]
         general = [item for item in agreements if item.plan_id is None]
         pool = general or agreements
         return pool[-1] if pool else None

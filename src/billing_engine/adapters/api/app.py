@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import hmac
-from collections.abc import Callable, Iterator
+from collections.abc import Callable
 from typing import Any
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, status
@@ -50,25 +50,10 @@ def get_actor(request: Request) -> Actor:
     )
 
 
-def get_services(request: Request) -> Iterator[Services]:
-    """Provide a transactional services bundle for the duration of a request."""
-    engine = request.app.state.engine
-    session = engine.session_factory()
-    uow = SqlUnitOfWork(session)
-    services = Services(
-        uow,
-        default_currency=engine.config.default_currency,
-        grace_period_days=engine.config.grace_period_days,
-        trial_days=engine.config.trial_days,
-    )
-    try:
-        yield services
-        uow.commit()
-    except Exception:
-        uow.rollback()
-        raise
-    finally:
-        session.close()
+def get_services(request: Request) -> Services:
+    """Return the request-scoped services bundle built by the transaction middleware."""
+    services: Services = request.state.services
+    return services
 
 
 def require_api_key(
@@ -889,6 +874,38 @@ def create_app(
 
     for error_type, status_code in _ERROR_STATUS.items():
         app.add_exception_handler(error_type, _make_handler(status_code))
+
+    @app.middleware("http")
+    async def transaction_middleware(request: Request, call_next: Callable[[Request], Any]) -> Any:
+        """Commit or roll back the request transaction before the response is sent.
+
+        FastAPI runs post-``yield`` dependency code after the response, so a
+        failed commit there cannot be reported to the client. Committing in
+        middleware guarantees success/failure is reflected in the response.
+        """
+        session = engine.session_factory()
+        uow = SqlUnitOfWork(session)
+        request.state.uow = uow
+        request.state.services = Services(
+            uow,
+            default_currency=engine.config.default_currency,
+            grace_period_days=engine.config.grace_period_days,
+            trial_days=engine.config.trial_days,
+        )
+        try:
+            response = await call_next(request)
+        except Exception:
+            uow.rollback()
+            session.close()
+            raise
+        try:
+            if response.status_code >= 400:
+                uow.rollback()
+            else:
+                uow.commit()
+        finally:
+            session.close()
+        return response
 
     app.include_router(_build_router())
     return app

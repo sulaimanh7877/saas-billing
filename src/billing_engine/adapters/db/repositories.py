@@ -126,7 +126,9 @@ class SqlCatalogRepository(_Repository):
 
     def list_prices(self, plan_version_id: str) -> list[e.Price]:
         models = self.session.scalars(
-            select(m.Price).where(m.Price.plan_version_id == plan_version_id)
+            select(m.Price)
+            .where(m.Price.plan_version_id == plan_version_id)
+            .order_by(m.Price.created_at, m.Price.id)
         )
         return [to_entity(model, e.Price) for model in models]
 

@@ -87,12 +87,27 @@ class LicenseService(Service):
         )
         if quantity < 1:
             raise ValidationError("quantity must be at least 1")
+        if agreement_id is not None:
+            agreement = require(
+                self.uow.partners.get_agreement(agreement_id),
+                "partner_agreement",
+                agreement_id,
+            )
+            if agreement.partner_id != partner.id:
+                raise ValidationError(
+                    f"agreement {agreement_id!r} does not belong to partner {partner_id!r}"
+                )
         if parent_allocation_id is not None:
-            require(
+            parent = require(
                 self.uow.licenses.get_allocation(parent_allocation_id),
                 "license_allocation",
                 parent_allocation_id,
             )
+            if parent.partner_id != partner.id:
+                raise ValidationError(
+                    f"parent allocation {parent_allocation_id!r} does not belong to "
+                    f"partner {partner_id!r}"
+                )
         allocation = LicenseAllocation(
             id=new_ulid(),
             partner_id=partner.id,
@@ -178,6 +193,8 @@ class LicenseService(Service):
 
         if customer_id is not None:
             customer = require(self.uow.customers.get(customer_id), "customer", customer_id)
+            if customer.partner_id != partner.id:
+                customer = self.customers.update(customer.id, partner_id=partner.id, actor=actor)
         else:
             if not external_id:
                 raise ValidationError("provide customer_id or external_id")
@@ -261,7 +278,9 @@ class LicenseService(Service):
                             actor=actor,
                         )
 
-        subscription = self.subscriptions.create(customer.id, version.id, actor=actor)
+        subscription = self.subscriptions.create(
+            customer.id, version.id, price_id=price.id, currency=currency, actor=actor
+        )
         license_.subscription_id = subscription.id
         self.uow.licenses.add_license(license_)
         allocation.quantity_issued += 1
