@@ -39,6 +39,18 @@ def as_utc(value: datetime) -> datetime:
     return value.astimezone(UTC)
 
 
+def normalize_currency(value: str) -> str:
+    """Return ``value`` as an uppercase ISO 4217 three-letter code.
+
+    Rejects anything that is not exactly three ASCII letters so callers cannot
+    persist invalid currencies such as ``"US"`` or ``"EURO"``.
+    """
+    currency = value.strip().upper() if isinstance(value, str) else ""
+    if len(currency) != 3 or not currency.isascii() or not currency.isalpha():
+        raise ValidationError(f"invalid currency {value!r}: expected a 3-letter ISO 4217 code")
+    return currency
+
+
 def _encode_ulid(value: int, length: int) -> str:
     chars: list[str] = []
     for _ in range(length):
@@ -108,12 +120,7 @@ class Money:
     def __post_init__(self) -> None:
         if isinstance(self.amount_minor, bool) or not isinstance(self.amount_minor, int):
             raise ValidationError("Money.amount_minor must be an integer of minor units")
-        currency = self.currency.strip().upper() if isinstance(self.currency, str) else ""
-        if len(currency) != 3 or not currency.isalpha():
-            raise ValidationError(
-                f"invalid currency {self.currency!r}: expected a 3-letter ISO 4217 code"
-            )
-        object.__setattr__(self, "currency", currency)
+        object.__setattr__(self, "currency", normalize_currency(self.currency))
 
     def _require_same_currency(self, other: Money) -> None:
         if self.currency != other.currency:

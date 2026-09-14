@@ -22,7 +22,7 @@ from billing_engine.domain.enums import (
     PayoutStatus,
 )
 from billing_engine.domain.errors import ConflictError, ValidationError
-from billing_engine.domain.value_objects import as_utc, new_ulid, utcnow
+from billing_engine.domain.value_objects import as_utc, new_ulid, normalize_currency, utcnow
 from billing_engine.services.base import Service, require
 from billing_engine.services.context import Actor
 
@@ -40,17 +40,26 @@ class PartnerAccountService(Service):
     def get_or_create_account(
         self, partner_id: str, currency: str, account_type: str
     ) -> PartnerAccount:
-        account = self.uow.partner_accounts.get_account(partner_id, currency, account_type)
+        normalized = normalize_currency(currency)
+        account = self.uow.partner_accounts.get_account_for_update(
+            partner_id, normalized, account_type
+        )
         if account is None:
-            account = PartnerAccount(
-                id=new_ulid(),
-                partner_id=partner_id,
-                currency=currency.upper(),
-                account_type=account_type,
-                balance_minor=0,
+            account = self.uow.partner_accounts.ensure_account(
+                PartnerAccount(
+                    id=new_ulid(),
+                    partner_id=partner_id,
+                    currency=normalized,
+                    account_type=account_type,
+                    balance_minor=0,
+                )
             )
-            self.uow.partner_accounts.add_account(account)
-            self.uow.flush()
+            account = (
+                self.uow.partner_accounts.get_account_for_update(
+                    partner_id, normalized, account_type
+                )
+                or account
+            )
         return account
 
     def post(
@@ -77,7 +86,7 @@ class PartnerAccountService(Service):
             entry_type=entry_type,
             amount_minor=amount_minor,
             balance_after_minor=account.balance_minor,
-            currency=currency.upper(),
+            currency=account.currency,
             reason=reason,
             reference_type=reference_type,
             reference_id=reference_id,
@@ -137,7 +146,7 @@ class PartnerAccountService(Service):
             id=new_ulid(),
             partner_id=partner.id,
             amount_minor=amount_minor,
-            currency=(currency or partner.currency).upper(),
+            currency=normalize_currency(currency or partner.currency),
             method=method,
             reference=reference,
             received_at=utcnow(),
@@ -256,7 +265,7 @@ class PartnerAccountService(Service):
         invoice = PartnerInvoice(
             id=new_ulid(),
             partner_id=partner.id,
-            currency=(currency or partner.currency).upper(),
+            currency=normalize_currency(currency or partner.currency),
             due_date=due_date,
             notes=notes,
         )
@@ -287,6 +296,18 @@ class PartnerAccountService(Service):
             invoice.issue_date = utcnow()
         self.uow.partner_accounts.update_invoice(invoice)
         self.uow.flush()
+        if finalize and total > 0:
+            self.post(
+                partner.id,
+                invoice.currency,
+                AccountType.RECEIVABLE.value,
+                PartnerLedgerEntryType.CHARGE.value,
+                total,
+                reason="partner invoice",
+                reference_type="partner_invoice",
+                reference_id=invoice.id,
+                actor=actor,
+            )
         self.audit.record(
             "partner_invoice.create", "partner_invoice", invoice.id, actor, after=invoice
         )
@@ -365,7 +386,7 @@ class PartnerAccountService(Service):
         payout = PartnerPayout(
             id=new_ulid(),
             partner_id=partner.id,
-            currency=(currency or partner.currency).upper(),
+            currency=normalize_currency(currency or partner.currency),
             reference=reference,
         )
         self.uow.partner_accounts.add_payout(payout)

@@ -136,24 +136,36 @@ class SqlReportRepository:
             select(
                 m.Partner.id,
                 m.Partner.name,
-                func.count(m.License.id),
-                func.coalesce(func.sum(m.Price.amount_minor), 0),
+                m.License.id,
+                m.Price.amount_minor,
+                m.PartnerAgreement.discount_bps,
             )
             .select_from(m.License)
             .join(m.Partner, m.Partner.id == m.License.partner_id)
-            .join(m.Price, m.Price.plan_version_id == m.License.plan_version_id)
+            .join(m.Subscription, m.Subscription.id == m.License.subscription_id)
+            .join(m.Price, m.Price.id == m.Subscription.price_id)
+            .join(m.LicenseAllocation, m.LicenseAllocation.id == m.License.allocation_id)
+            .outerjoin(
+                m.PartnerAgreement,
+                m.PartnerAgreement.id == m.LicenseAllocation.agreement_id,
+            )
             .where(
                 m.Price.currency == currency,
                 m.License.status.in_(("issued", "active")),
             )
-            .group_by(m.Partner.id, m.Partner.name)
         ).all()
-        return [
-            {
-                "partner_id": str(partner_id),
-                "partner_name": name,
-                "licenses": int(licenses),
-                "value_minor": int(value),
-            }
-            for partner_id, name, licenses, value in rows
-        ]
+        grouped: dict[str, dict[str, Any]] = {}
+        for partner_id, name, _license_id, amount, discount_bps in rows:
+            bucket = grouped.setdefault(
+                str(partner_id),
+                {
+                    "partner_id": str(partner_id),
+                    "partner_name": name,
+                    "licenses": 0,
+                    "value_minor": 0,
+                },
+            )
+            bucket["licenses"] += 1
+            discount = int(discount_bps or 0)
+            bucket["value_minor"] += int(amount) * (10_000 - discount) // 10_000
+        return sorted(grouped.values(), key=lambda item: item["value_minor"], reverse=True)

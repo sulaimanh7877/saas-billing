@@ -328,6 +328,12 @@ self-service portal, multi-prefix in one process, async DB backend, i18n.
 - `EngineConfig.trial_days` is the fallback trial length when a plan version
   defines none; `grace_period_days` keeps a past-due subscription accessible
   after its period ends before it expires.
+- Post-v0.2.0 audit (#22) tightened several invariants to match this design:
+  published plan versions are immutable, `customer_custom` versions are
+  customer-scoped and excluded from the catalog listing, `cancel_at_period_end`
+  uses `trial_end` during a trial, `pause(until=...)` is honored by
+  `process_due`, partner accounts are unique per (partner, currency, type), and
+  finalized partner invoices post a backing ledger charge.
 - Next: payment gateway adapter (Stripe seam), proration, usage-based pricing,
   partner portal.
 

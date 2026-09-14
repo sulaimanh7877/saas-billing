@@ -5,7 +5,7 @@ from __future__ import annotations
 from billing_engine.domain.entities import CreditEntry
 from billing_engine.domain.enums import CreditEntryType
 from billing_engine.domain.errors import ConflictError, ValidationError
-from billing_engine.domain.value_objects import new_ulid
+from billing_engine.domain.value_objects import new_ulid, normalize_currency
 from billing_engine.services.base import Service, require
 from billing_engine.services.context import Actor
 
@@ -61,7 +61,7 @@ class CreditService(Service):
             customer.id,
             CreditEntryType.GRANT.value,
             amount_minor,
-            currency=(currency or customer.currency).upper(),
+            currency=normalize_currency(currency or customer.currency),
             reason=reason,
             reference_type=reference_type,
             reference_id=reference_id,
@@ -87,7 +87,7 @@ class CreditService(Service):
             customer.id,
             CreditEntryType.REFUND.value,
             amount_minor,
-            currency=(currency or customer.currency).upper(),
+            currency=normalize_currency(currency or customer.currency),
             reason=reason,
             reference_type=reference_type,
             reference_id=reference_id,

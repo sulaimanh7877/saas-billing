@@ -9,7 +9,7 @@ from typing import Any
 from billing_engine.domain.entities import CommissionRule, Partner, PartnerAgreement
 from billing_engine.domain.enums import CommissionBasis, MoneyModel, PartnerType
 from billing_engine.domain.errors import ConflictError, ValidationError
-from billing_engine.domain.value_objects import as_utc, new_ulid, utcnow
+from billing_engine.domain.value_objects import as_utc, new_ulid, normalize_currency, utcnow
 from billing_engine.services.base import Service, require
 from billing_engine.services.context import Actor
 
@@ -53,7 +53,7 @@ class PartnerService(Service):
             external_id=external_id,
             email=email,
             phone=phone,
-            currency=(currency or self.default_currency).upper(),
+            currency=normalize_currency(currency or self.default_currency),
             parent_partner_id=parent_partner_id,
             attributes=attributes or {},
         )
@@ -151,7 +151,7 @@ class PartnerService(Service):
             id=new_ulid(),
             partner_id=partner.id,
             money_model=money_model,
-            currency=(currency or partner.currency).upper(),
+            currency=normalize_currency(currency or partner.currency),
             discount_bps=discount_bps,
             plan_id=plan_id,
             commission_rule_id=commission_rule_id,

@@ -38,18 +38,34 @@ def to_entity(model: Base, entity_type: type[EntityT]) -> EntityT:
 def apply_entity(model: Any, entity: Any) -> None:
     """Copy entity fields onto a model instance in place.
 
-    Unset ``created_at``/``updated_at`` are filled on both the model and the
-    entity so callers receive timestamps on freshly created or updated domain
-    objects, not only on rows read back from the database.
+    Managed timestamps are handled specially so they stay coherent:
+
+    - On insert, unset ``created_at``/``updated_at`` are filled on both the
+      model and the entity, so callers receive timestamps immediately.
+    - On update, ``created_at`` is never overwritten and is backfilled onto the
+      entity from the persisted row; ``updated_at`` is always advanced so the
+      model's ``onupdate`` cannot be suppressed by a stale entity value.
     """
     is_update = sa_inspect(model).persistent
     now = utcnow()
     for field in fields(entity):
         name = field.name
         value = getattr(entity, name)
-        if name in _MANAGED_TIMESTAMPS and value is None:
-            if name == "created_at" and is_update:
+        if name in _MANAGED_TIMESTAMPS:
+            if is_update:
+                if name == "created_at":
+                    if value is None:
+                        existing = getattr(model, name)
+                        setattr(
+                            entity,
+                            name,
+                            _normalize(existing) if existing is not None else now,
+                        )
+                    continue
+                setattr(model, name, now)
+                setattr(entity, name, now)
                 continue
-            value = now
-            setattr(entity, name, value)
+            if value is None:
+                value = now
+                setattr(entity, name, value)
         setattr(model, name, value)

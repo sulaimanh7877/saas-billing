@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from sqlalchemy import and_, func, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from billing_engine.adapters.db import models as m
@@ -93,8 +94,21 @@ class SqlCatalogRepository(_Repository):
         apply_entity(model, plan)
 
     def list_plans(self, limit: int = 100, offset: int = 0) -> list[e.Plan]:
+        has_versions = select(m.PlanVersion.id).where(m.PlanVersion.plan_id == m.Plan.id).exists()
+        has_catalog_version = (
+            select(m.PlanVersion.id)
+            .where(
+                m.PlanVersion.plan_id == m.Plan.id,
+                m.PlanVersion.scope != "customer_custom",
+            )
+            .exists()
+        )
         models = self.session.scalars(
-            select(m.Plan).order_by(m.Plan.created_at).limit(limit).offset(offset)
+            select(m.Plan)
+            .where(or_(~has_versions, has_catalog_version))
+            .order_by(m.Plan.created_at)
+            .limit(limit)
+            .offset(offset)
         )
         return [to_entity(model, e.Plan) for model in models]
 
@@ -196,10 +210,10 @@ class SqlSubscriptionRepository(_Repository):
         models = self.session.scalars(
             select(m.Subscription)
             .where(
-                m.Subscription.status.in_(("trialing", "active", "past_due")),
+                m.Subscription.status.in_(("trialing", "active", "past_due", "paused")),
                 or_(
                     and_(
-                        m.Subscription.status != "trialing",
+                        m.Subscription.status.in_(("active", "past_due")),
                         m.Subscription.current_period_end.is_not(None),
                         m.Subscription.current_period_end <= before,
                     ),
@@ -207,6 +221,11 @@ class SqlSubscriptionRepository(_Repository):
                         m.Subscription.status == "trialing",
                         m.Subscription.trial_end.is_not(None),
                         m.Subscription.trial_end <= before,
+                    ),
+                    and_(
+                        m.Subscription.status == "paused",
+                        m.Subscription.paused_until.is_not(None),
+                        m.Subscription.paused_until <= before,
                     ),
                 ),
             )
@@ -554,6 +573,37 @@ class SqlPartnerAccountRepository(_Repository):
             )
         )
         return to_entity(model, e.PartnerAccount) if model else None
+
+    def get_account_for_update(
+        self, partner_id: str, currency: str, account_type: str
+    ) -> e.PartnerAccount | None:
+        model = self.session.scalar(
+            select(m.PartnerAccount)
+            .where(
+                m.PartnerAccount.partner_id == partner_id,
+                m.PartnerAccount.currency == currency.upper(),
+                m.PartnerAccount.account_type == account_type,
+            )
+            .with_for_update()
+        )
+        return to_entity(model, e.PartnerAccount) if model else None
+
+    def ensure_account(self, account: e.PartnerAccount) -> e.PartnerAccount:
+        existing = self.get_account(account.partner_id, account.currency, account.account_type)
+        if existing is not None:
+            return existing
+        try:
+            with self.session.begin_nested():
+                model = m.PartnerAccount()
+                apply_entity(model, account)
+                self.session.add(model)
+                self.session.flush()
+            return account
+        except IntegrityError:
+            existing = self.get_account(account.partner_id, account.currency, account.account_type)
+            if existing is None:
+                raise
+            return existing
 
     def list_accounts(self, partner_id: str) -> list[e.PartnerAccount]:
         models = self.session.scalars(

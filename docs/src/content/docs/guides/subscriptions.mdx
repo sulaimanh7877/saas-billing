@@ -133,8 +133,8 @@ for adjustment in services.uow.subscriptions.list_adjustments(sub.id):
     print(adjustment.adjustment_type, adjustment.delta_days, adjustment.reason)
 ```
 
-Types include `extend`, `trial_extend`, `pause`, `resume`, `cancel`, `renew`,
-`reactivate`, `expire`, `plan_change`, and `set_period_end`.
+Types include `extend`, `trial_extend`, `pause`, `past_due`, `resume`, `cancel`,
+`renew`, `reactivate`, `expire`, `plan_change`, and `set_period_end`.
 
 ## Reading subscriptions
 

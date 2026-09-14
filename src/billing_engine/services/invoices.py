@@ -8,7 +8,7 @@ from typing import Any
 from billing_engine.domain.entities import Invoice, InvoiceLine, Payment
 from billing_engine.domain.enums import InvoiceStatus, PaymentMethod
 from billing_engine.domain.errors import ConflictError, ValidationError
-from billing_engine.domain.value_objects import new_ulid, utcnow
+from billing_engine.domain.value_objects import new_ulid, normalize_currency, utcnow
 from billing_engine.services.base import Service, require
 from billing_engine.services.context import Actor
 
@@ -51,7 +51,7 @@ class InvoiceService(Service):
             customer_id=customer.id,
             subscription_id=subscription_id,
             status=InvoiceStatus.DRAFT.value,
-            currency=(currency or customer.currency).upper(),
+            currency=normalize_currency(currency or customer.currency),
             due_date=due_date,
             notes=notes,
         )

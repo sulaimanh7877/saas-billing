@@ -313,6 +313,7 @@ class License(IdMixin, CreatedAtMixin, Base):
 
 class PartnerAccount(IdMixin, TimestampMixin, Base):
     __tablename__ = "partner_accounts"
+    __table_args__ = (UniqueConstraint("partner_id", "currency", "account_type"),)
 
     partner_id: Mapped[str] = mapped_column(ForeignKey("partners.id"), index=True, nullable=False)
     currency: Mapped[str] = mapped_column(String(3), nullable=False)

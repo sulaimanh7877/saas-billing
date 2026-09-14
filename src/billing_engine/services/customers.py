@@ -6,7 +6,7 @@ from typing import Any
 
 from billing_engine.domain.entities import Customer
 from billing_engine.domain.errors import ConflictError, ValidationError
-from billing_engine.domain.value_objects import new_ulid
+from billing_engine.domain.value_objects import new_ulid, normalize_currency
 from billing_engine.services.base import Service, require
 from billing_engine.services.context import Actor
 
@@ -37,7 +37,7 @@ class CustomerService(Service):
             external_id=cleaned,
             email=email,
             name=name,
-            currency=(currency or self.default_currency).upper(),
+            currency=normalize_currency(currency or self.default_currency),
             partner_id=partner_id,
             attributes=attributes or {},
         )
