@@ -73,6 +73,8 @@ class InvoiceService(Service):
         self.uow.flush()
         self.audit.record("invoice.create", "invoice", invoice.id, actor, after=invoice)
         self.audit.emit("invoice.created", {"invoice_id": invoice.id, "customer_id": customer.id})
+        if finalize:
+            self.audit.emit("invoice.finalized", {"invoice_id": invoice.id})
         return invoice
 
     def create_from_subscription(
@@ -124,7 +126,7 @@ class InvoiceService(Service):
         unit_amount_minor: int = 0,
         actor: Actor | None = None,
     ) -> InvoiceLine:
-        """Append a line item to a draft or open invoice."""
+        """Append a line item to a draft invoice."""
         invoice = self.get(invoice_id)
         if invoice.status not in _EDITABLE:
             raise ConflictError(f"cannot add lines to a {invoice.status!r} invoice")
@@ -171,8 +173,8 @@ class InvoiceService(Service):
     ) -> Invoice:
         """Void an invoice."""
         invoice = self.get(invoice_id)
-        if invoice.status == InvoiceStatus.PAID.value:
-            raise ConflictError("cannot void a paid invoice")
+        if invoice.status in {InvoiceStatus.PAID.value, InvoiceStatus.UNCOLLECTIBLE.value}:
+            raise ConflictError(f"cannot void a {invoice.status!r} invoice")
         invoice.status = InvoiceStatus.VOID.value
         invoice.voided_at = utcnow()
         self.uow.invoices.update_invoice(invoice)

@@ -57,6 +57,9 @@ class EventDispatcher:
                     delivered += 1
             session.commit()
             return delivered
+        except Exception:
+            session.rollback()
+            raise
         finally:
             session.close()
 

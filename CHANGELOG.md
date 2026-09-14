@@ -6,6 +6,32 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **License issuance currency mismatch**: issuing now passes the
+  agreement-currency price into the subscription, so the subscription and any
+  invoice derived from it use the same currency/amount that was charged (#20).
+- **Deterministic price selection**: `list_prices` is ordered, removing the
+  dialect-dependent `prices[0]` fallback (#20).
+- **Reference validation**: agreements reject a dangling `plan_id` and reversed
+  effective windows; allocations reject a dangling `agreement_id` or an
+  agreement/parent allocation belonging to another partner (#20).
+- **Partner invoicing**: overpayments are rejected, and void payouts can no
+  longer be paid (#20).
+- **Subscription lifecycle**: `resume` now requires a paused subscription, and
+  extending an expired subscription clears `canceled_at`; entering the grace
+  window writes an audit row (#20).
+- **Attribution**: issuing a license to an existing customer now records the
+  partner on both the customer and the subscription (#20).
+- **Invoicing**: voiding an uncollectible invoice is rejected, and
+  `finalize=True` emits an `invoice.finalized` outbox event (#20).
+- **API transactions**: the request transaction now commits (or rolls back)
+  before the response is sent, so a failed commit is no longer reported as
+  success (#20).
+- **Outbox**: the dispatcher rolls the session back when delivery raises an
+  unexpected error (#20).
+- **CLI**: `seed`/`report`/`audit` report configuration errors cleanly instead
+  of raising a traceback (#20).
+
 ### Added
 - **Documentation site** built with **Astro + Starlight** (the stack behind
   `docs.astro.build`): a quick start, a step-by-step tutorial, guides for every

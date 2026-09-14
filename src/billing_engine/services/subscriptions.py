@@ -188,6 +188,7 @@ class SubscriptionService(Service):
         subscription.current_period_end = new_end
         if subscription.status == SubscriptionStatus.EXPIRED.value:
             subscription.status = SubscriptionStatus.ACTIVE.value
+            subscription.canceled_at = None
         self._apply(
             subscription,
             AdjustmentType.EXTEND.value,
@@ -264,7 +265,8 @@ class SubscriptionService(Service):
     ) -> Subscription:
         """Resume a paused subscription."""
         subscription = self.get(subscription_id)
-        ensure_transition(SubscriptionStatus(subscription.status), SubscriptionStatus.ACTIVE)
+        if subscription.status != SubscriptionStatus.PAUSED.value:
+            raise ConflictError("only a paused subscription can be resumed")
         subscription.status = SubscriptionStatus.ACTIVE.value
         subscription.paused_until = None
         self._apply(
@@ -436,7 +438,9 @@ class SubscriptionService(Service):
         self.audit.record("subscription.expire", "subscription", subscription.id, actor)
         self.audit.emit("subscription.expired", {"subscription_id": subscription.id})
 
-    def _enter_grace(self, subscription: Subscription, moment: datetime) -> bool:
+    def _enter_grace(
+        self, subscription: Subscription, moment: datetime, actor: Actor | None = None
+    ) -> bool:
         """Start the post-period grace window; return True while grace applies."""
         if self.grace_period_days <= 0:
             return False
@@ -446,6 +450,9 @@ class SubscriptionService(Service):
         subscription.grace_until = moment + timedelta(days=self.grace_period_days)
         self.uow.subscriptions.update(subscription)
         self.uow.flush()
+        self.audit.record(
+            "subscription.past_due", "subscription", subscription.id, actor, after=subscription
+        )
         self.audit.emit("subscription.past_due", {"subscription_id": subscription.id})
         return True
 
@@ -456,11 +463,11 @@ class SubscriptionService(Service):
         for subscription in self.uow.subscriptions.list_due(moment):
             interval = self._interval(subscription)
             if subscription.cancel_at is not None and as_utc(subscription.cancel_at) <= moment:
-                if not self._enter_grace(subscription, moment):
+                if not self._enter_grace(subscription, moment, actor):
                     self._expire(subscription, reason="canceled at period end", actor=actor)
                 continue
             if interval is BillingInterval.ONE_TIME:
-                if not self._enter_grace(subscription, moment):
+                if not self._enter_grace(subscription, moment, actor):
                     self._expire(subscription, reason="one-time period ended", actor=actor)
                 continue
             self.renew(subscription.id, now=moment, actor=actor)

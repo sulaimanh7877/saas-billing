@@ -60,17 +60,20 @@ class CustomerService(Service):
         email: str | None = None,
         name: str | None = None,
         attributes: dict[str, Any] | None = None,
+        partner_id: str | None = None,
         actor: Actor | None = None,
     ) -> Customer:
         """Update mutable customer fields."""
         before = self.get(customer_id)
+        if partner_id is not None:
+            require(self.uow.partners.get_partner(partner_id), "partner", partner_id)
         after = Customer(
             id=before.id,
             external_id=before.external_id,
             email=email if email is not None else before.email,
             name=name if name is not None else before.name,
             currency=before.currency,
-            partner_id=before.partner_id,
+            partner_id=partner_id if partner_id is not None else before.partner_id,
             attributes=attributes if attributes is not None else before.attributes,
         )
         self.uow.customers.update(after)

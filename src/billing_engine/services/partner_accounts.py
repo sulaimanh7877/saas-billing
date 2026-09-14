@@ -313,6 +313,11 @@ class PartnerAccountService(Service):
             raise ConflictError(
                 f"cannot pay a {invoice.status!r} invoice; only open invoices are payable"
             )
+        remaining = invoice.total_minor - invoice.amount_paid_minor
+        if amount_minor > remaining:
+            raise ValidationError(
+                f"payment {amount_minor} exceeds the remaining balance {remaining}"
+            )
         payment = PartnerPayment(
             id=new_ulid(),
             partner_id=invoice.partner_id,
@@ -392,6 +397,8 @@ class PartnerAccountService(Service):
         )
         if payout.status == PayoutStatus.PAID.value:
             raise ConflictError("payout already paid")
+        if payout.status == PayoutStatus.VOID.value:
+            raise ConflictError("cannot pay a void payout")
         payout.status = PayoutStatus.PAID.value
         payout.paid_at = utcnow()
         payout.reference = reference or payout.reference

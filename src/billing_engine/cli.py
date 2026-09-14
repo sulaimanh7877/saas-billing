@@ -61,9 +61,9 @@ def seed(
     prefix: str | None = PrefixOption,
 ) -> None:
     """Seed demo data (a feature, plan, customer, and subscription)."""
-    engine = _build_engine(dsn, prefix)
-    engine.migrate()
     try:
+        engine = _build_engine(dsn, prefix)
+        engine.migrate()
         with engine.transaction() as services:
             services.catalog.create_feature("reports", name="Reports")
             plan = services.catalog.create_plan("pro", "Pro")
@@ -90,9 +90,13 @@ def report(
     currency: str = typer.Option("USD", help="Reporting currency."),
 ) -> None:
     """Print headline billing metrics."""
-    engine = _build_engine(dsn, prefix)
-    with engine.transaction() as services:
-        overview = services.reports.overview(currency)
+    try:
+        engine = _build_engine(dsn, prefix)
+        with engine.transaction() as services:
+            overview = services.reports.overview(currency)
+    except BillingError as exc:
+        typer.secho(str(exc), fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1) from exc
     typer.echo(f"customers: {overview['customers']}")
     typer.echo(f"mrr_minor: {overview['mrr_minor']}")
     typer.echo(f"subscriptions: {overview['subscriptions']}")
@@ -106,9 +110,13 @@ def audit(
     limit: int = typer.Option(20, help="Maximum entries to show."),
 ) -> None:
     """Print recent audit-log entries."""
-    engine = _build_engine(dsn, prefix)
-    with engine.transaction() as services:
-        entries = services.uow.audit.list(entity_type=entity_type, limit=limit)
+    try:
+        engine = _build_engine(dsn, prefix)
+        with engine.transaction() as services:
+            entries = services.uow.audit.list(entity_type=entity_type, limit=limit)
+    except BillingError as exc:
+        typer.secho(str(exc), fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1) from exc
     for entry in entries:
         typer.echo(f"{entry.created_at} {entry.action} {entry.entity_type}:{entry.entity_id}")
 
